@@ -14,8 +14,7 @@ import type {
   WorkItem,
   WorkItemStatus,
 } from '@ecp/shared';
-import { CADENCE_DEFAULTS, defaultGlobalSettings } from '@ecp/shared';
-import { addDays } from '../util/dates.js';
+import { addDays, CADENCE_DEFAULTS, defaultGlobalSettings } from '@ecp/shared';
 import { Rng } from './rng.js';
 
 export interface SyntheticConfig {

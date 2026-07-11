@@ -19,16 +19,19 @@ one pull request each.
 
 | Phase | Scope | Status |
 | ----- | ----- | ------ |
-| **1** | Data model + synthetic importer | ✅ this PR |
-| **2** | Capacity engine + exhaustive unit tests | ⏳ next |
-| **3** | Calendar / timeline UI (red/yellow/green) | ⏳ |
+| **1** | Data model + synthetic importer | ✅ merged |
+| **2** | Capacity engine + exhaustive unit tests | ✅ this PR |
+| **3** | Calendar / timeline UI (red/yellow/green) | ⏳ next |
 
 ## Stack
 
 - **Monorepo** via npm workspaces.
-- **`@ecp/shared`** — TypeScript domain model, the importer contract, and the
-  configurable settings/defaults. Consumed by the backend, the engine
-  (Phase 2), and the UI (Phase 3).
+- **`@ecp/shared`** — TypeScript domain model, the importer contract, pure
+  date/calendar helpers, and the configurable settings/defaults. Consumed by
+  the engine, the backend, and the UI (Phase 3).
+- **`@ecp/engine`** — the pure, dependency-free capacity/feasibility engine.
+  Projects a dev-complete date and returns a red/yellow/green verdict. No DB,
+  no UI, no runtime dependencies beyond `@ecp/shared` types/helpers.
 - **`@ecp/backend`** — Node + TypeScript. SQLite via `better-sqlite3`, a
   minimal Fastify API, and the `SyntheticImporter`. Tests run on
   [Vitest](https://vitest.dev).
@@ -51,6 +54,48 @@ adapter can drop in later (Phase 7) without touching the engine or UI.
   Tuesday, Mon–Fri), on-call multiplier (0.5), and green/yellow/red buffer
   thresholds live in the settings store with sensible defaults. Jira mapping
   fields are present but inert.
+
+## What Phase 2 delivers
+
+The **capacity / feasibility engine** (`packages/engine`) — a pure,
+dependency-free module, the highest-value part of the app.
+
+- **Projection** — walks forward one working day at a time from `today`,
+  accumulating each day's team throughput until the remaining points are
+  covered, to produce a **projected dev-complete date**.
+- **Capacity model** — a member's per-sprint velocity is spread across the
+  sprint's working days and scaled by availability: `0` on PTO, the on-call
+  multiplier when on call, and any velocity-override multiplier — composed
+  multiplicatively. Inactive members contribute nothing. A partial
+  (already-underway) sprint only contributes its remaining days.
+- **Verdict** — `buffer = workingDaysBetween(devComplete, gatingDate)`, then
+  **green** (buffer ≥ `green_min_buffer_days`), **yellow** (`0 ≤ buffer <
+  green_min`), **red** (buffer `< 0`, or the work can't finish within the
+  horizon), each with a human-readable reason.
+- **Configurable** — sprint cadence, on-call multiplier, and the buffer
+  thresholds are all inputs; nothing is hard-coded.
+- **Pure & exhaustively tested** — no DB, no UI, no I/O. Given identical inputs
+  it returns an identical result, covering green/yellow/red edges, buffer sign,
+  PTO/on-call/override effects, cadence differences, cut-ticket recalculation,
+  and the infeasible case.
+
+```ts
+import { project } from '@ecp/engine';
+
+const result = project({
+  today: '2026-01-06',
+  team,               // cadence + working days
+  members, pto, oncall, velocityOverrides,
+  workItems,          // remaining points derived from statuses
+  gatingDate: '2026-03-02',
+  config: { greenMinBufferDays: 5, oncallMultiplier: 0.5 },
+});
+// → { projectedDevCompleteDate, bufferWorkingDays, verdict, reason, sprints }
+```
+
+`projectEpicFromDataset(dataset, epicKey, today)` is a thin bridge that pulls
+the epic's team, gating milestone, work items, and settings out of a full
+`DomainDataset` and calls the pure core.
 
 ## Getting started
 
@@ -101,12 +146,14 @@ curl http://127.0.0.1:3001/api/summary
 
 ```
 packages/
-  shared/     @ecp/shared  — domain types, importer interface, settings defaults
+  shared/     @ecp/shared  — domain types, importer interface, date helpers, settings defaults
+  engine/     @ecp/engine  — pure capacity engine (projection + verdict)
+    src/        calendar.ts, capacity.ts, project.ts, adapter.ts, config.ts
+    test/       vitest suites (calendar, capacity, project, adapter)
   backend/    @ecp/backend — SQLite schema/persistence, SyntheticImporter, API
     src/
       db/         schema.ts, database.ts, persist.ts
       importer/   rng.ts, synthetic.ts
-      util/       dates.ts
       scripts/    seed.ts
       server.ts
     test/       vitest suites
