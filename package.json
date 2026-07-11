@@ -1,0 +1,21 @@
+{
+  "name": "engineering-capacity-planner",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local, single-user engineering capacity / sprint-planning tool. Projects epic dev-complete dates against configurable team capacity and renders a red/yellow/green feasibility verdict.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "workspaces": [
+    "packages/shared",
+    "packages/backend"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "seed": "npm run seed --workspace @ecp/backend"
+  }
+}
