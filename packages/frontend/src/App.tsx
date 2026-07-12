@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { DomainDataset } from '@ecp/shared';
 import { Controls } from './components/Controls';
+import { DependencyGraph } from './components/DependencyGraph';
 import { StatusStrip } from './components/StatusStrip';
 import { Timeline } from './components/Timeline';
 import { WorkItemList } from './components/WorkItemList';
@@ -55,6 +56,7 @@ function Planner({ dataset, source }: { dataset: DomainDataset; source: DatasetS
   });
 
   const [scenario, setScenario] = useState<Scenario>(initialScenario);
+  const [tab, setTab] = useState<'timeline' | 'dependencies'>('timeline');
   const result = useMemo(() => runScenario(scope, scenario), [scope, scenario]);
 
   const patch = (p: Partial<Scenario>) => setScenario((s) => ({ ...s, ...p }));
@@ -77,9 +79,25 @@ function Planner({ dataset, source }: { dataset: DomainDataset; source: DatasetS
           </div>
         </div>
         <nav className="tabs">
-          <span className="tab active">Timeline</span>
-          <span className="tab disabled" title="Phase 4">Dependencies</span>
-          <span className="tab disabled" title="Phase 5">Configuration</span>
+          <button
+            type="button"
+            className={`tab${tab === 'timeline' ? ' active' : ''}`}
+            data-testid="tab-timeline"
+            onClick={() => setTab('timeline')}
+          >
+            Timeline
+          </button>
+          <button
+            type="button"
+            className={`tab${tab === 'dependencies' ? ' active' : ''}`}
+            data-testid="tab-dependencies"
+            onClick={() => setTab('dependencies')}
+          >
+            Dependencies
+          </button>
+          <span className="tab disabled" title="Phase 5">
+            Configuration
+          </span>
         </nav>
       </header>
 
@@ -89,26 +107,36 @@ function Planner({ dataset, source }: { dataset: DomainDataset; source: DatasetS
 
       <StatusStrip result={result} />
 
-      <div className="panel">
-        <Timeline scope={scope} result={result} today={scenario.today} />
-        <p className="footnote">
-          Gating relevant day: <strong>{scope.gating.name}</strong> on{' '}
-          {formatDate(scope.gating.date)}. The projection re-runs on every change below.
-        </p>
-      </div>
+      {tab === 'timeline' ? (
+        <>
+          <div className="panel">
+            <Timeline scope={scope} result={result} today={scenario.today} />
+            <p className="footnote">
+              Gating relevant day: <strong>{scope.gating.name}</strong> on{' '}
+              {formatDate(scope.gating.date)}. The projection re-runs on every change below.
+            </p>
+          </div>
 
-      <div className="panel">
-        <Controls scenario={scenario} onChange={patch} onReset={() => setScenario(initialScenario())} />
-      </div>
+          <div className="panel">
+            <Controls
+              scenario={scenario}
+              onChange={patch}
+              onReset={() => setScenario(initialScenario())}
+            />
+          </div>
 
-      <div className="panel">
-        <WorkItemList
-          scope={scope}
-          scenario={scenario}
-          onToggleCut={(k) => toggleInSet('cutItemKeys', k)}
-          onToggleDone={(k) => toggleInSet('doneItemKeys', k)}
-        />
-      </div>
+          <div className="panel">
+            <WorkItemList
+              scope={scope}
+              scenario={scenario}
+              onToggleCut={(k) => toggleInSet('cutItemKeys', k)}
+              onToggleDone={(k) => toggleInSet('doneItemKeys', k)}
+            />
+          </div>
+        </>
+      ) : (
+        <DependencyGraph scope={scope} scenario={scenario} />
+      )}
     </div>
   );
 }

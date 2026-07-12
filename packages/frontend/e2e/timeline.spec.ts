@@ -43,3 +43,29 @@ test.describe('Calendar / timeline tab', () => {
     await expect(strip).toHaveAttribute('data-verdict', 'green');
   });
 });
+
+test.describe('Dependencies tab', () => {
+  test('renders the graph, highlights high-leverage blockers, and ranks them', async ({ page }) => {
+    await page.goto('/');
+
+    await page.getByTestId('tab-dependencies').click();
+
+    // The flowchart renders with a node per ticket and at least one edge.
+    const svg = page.getByTestId('dependency-svg');
+    await expect(svg).toBeVisible();
+    await expect(svg.locator('.graph-node')).not.toHaveCount(0);
+    await expect(svg.locator('.dependency-edge').first()).toBeVisible();
+
+    // At least one node is flagged as high leverage.
+    await expect(svg.locator('.graph-node[data-tier="high"]').first()).toBeVisible();
+
+    // The "work these next" leaderboard lists the top blockers.
+    const list = page.getByTestId('leverage-list');
+    await expect(list).toBeVisible();
+    await expect(list.locator('li')).not.toHaveCount(0);
+
+    // Switching back to the timeline still works.
+    await page.getByTestId('tab-timeline').click();
+    await expect(page.getByTestId('timeline')).toBeVisible();
+  });
+});

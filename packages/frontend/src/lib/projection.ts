@@ -1,4 +1,5 @@
 import type {
+  Dependency,
   DomainDataset,
   Epic,
   EpicMilestone,
@@ -24,6 +25,8 @@ export interface EpicScope {
   /** The epic's user stories (the grouping layer above work items). */
   stories: UserStory[];
   workItems: WorkItem[];
+  /** "Blocks" edges whose endpoints are both inside this epic. */
+  dependencies: Dependency[];
   members: TeamMember[];
   pto: Pto[];
   oncall: Oncall[];
@@ -65,6 +68,10 @@ export function scopeEpic(dataset: DomainDataset, epicKey: string): EpicScope {
   const workItems = dataset.workItems
     .filter((w) => storyKeys.has(w.storyKey))
     .sort((a, b) => a.key.localeCompare(b.key, undefined, { numeric: true }));
+  const itemKeys = new Set(workItems.map((w) => w.key));
+  const dependencies = dataset.dependencies.filter(
+    (d) => itemKeys.has(d.blockerItemKey) && itemKeys.has(d.blockedItemKey),
+  );
 
   const members = dataset.members.filter((m) => m.teamId === team.id);
   const memberIds = new Set(members.map((m) => m.id));
@@ -80,6 +87,7 @@ export function scopeEpic(dataset: DomainDataset, epicKey: string): EpicScope {
     milestones,
     stories,
     workItems,
+    dependencies,
     members,
     pto,
     oncall,

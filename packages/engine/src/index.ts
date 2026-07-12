@@ -23,3 +23,9 @@ export {
   remainingPoints,
 } from './project.js';
 export { projectEpicFromDataset, readEngineConfig } from './adapter.js';
+export {
+  type GraphEdge,
+  type GraphNodeAnalysis,
+  type GraphAnalysis,
+  analyzeGraph,
+} from './graph.js';
