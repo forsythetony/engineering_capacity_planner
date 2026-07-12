@@ -1,0 +1,190 @@
+import { useMemo } from 'react';
+import type { EpicScope, Scenario } from '../lib/projection';
+import { buildGraphLayout, type LayoutEdge, type LayoutNode } from '../lib/graph';
+
+interface DependencyGraphProps {
+  scope: EpicScope;
+  scenario: Scenario;
+}
+
+/**
+ * Dependencies tab (project plan §6): a left-to-right flowchart of the epic's
+ * tickets with "blocked by" edges, high-leverage blockers highlighted, plus a
+ * ranked list of the tickets that unblock the most downstream work so the team
+ * knows what to pick up next. Cut/done state from the timeline scenario is
+ * reflected here so both tabs tell the same story.
+ */
+export function DependencyGraph({ scope, scenario }: DependencyGraphProps) {
+  const layout = useMemo(() => buildGraphLayout(scope, scenario), [scope, scenario]);
+  const { nodes, edges, width, height, analysis } = layout;
+
+  const topBlockers = analysis.leaderboard.filter((n) => n.transitiveDependents > 0).slice(0, 5);
+
+  if (nodes.length === 0) {
+    return (
+      <div className="panel" data-testid="dependency-graph">
+        <div className="section-title">
+          <h2>Dependencies</h2>
+        </div>
+        <p className="hint">This epic has no work items to graph.</p>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="panel" data-testid="dependency-graph">
+        <div className="section-title">
+          <h2>Dependency graph</h2>
+          <span className="hint">
+            Arrows point from a blocker to the work it unblocks. Highlighted tickets free the most
+            downstream work.
+          </span>
+        </div>
+
+        {analysis.hasCycle && (
+          <div className="graph-warning" data-testid="graph-cycle-warning">
+            ⚠ Circular dependency detected ({analysis.cycle.join(' → ')} → {analysis.cycle[0]}).
+            Layout is best-effort until it's resolved.
+          </div>
+        )}
+
+        <GraphLegend />
+
+        <div className="graph-scroll">
+          <svg
+            className="dependency-svg"
+            width={width}
+            height={height}
+            viewBox={`0 0 ${width} ${height}`}
+            role="img"
+            aria-label="Ticket dependency graph"
+            data-testid="dependency-svg"
+          >
+            <defs>
+              <marker
+                id="arrow"
+                viewBox="0 0 10 10"
+                refX="9"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+              >
+                <path d="M0,0 L10,5 L0,10 z" className="edge-arrow" />
+              </marker>
+            </defs>
+
+            {edges.map((e) => (
+              <EdgePath key={e.id} edge={e} />
+            ))}
+            {nodes.map((n) => (
+              <GraphNode key={n.key} node={n} />
+            ))}
+          </svg>
+        </div>
+      </div>
+
+      <div className="panel">
+        <div className="section-title">
+          <h2>Work these next</h2>
+          <span className="hint">Highest-leverage blockers — finishing them unblocks the most.</span>
+        </div>
+        <ol className="leverage-list" data-testid="leverage-list">
+          {topBlockers.map((n) => (
+            <li key={n.key} data-testid={`leverage-${n.key}`}>
+              <span className="badge high-leverage">unblocks {n.transitiveDependents}</span>
+              <strong>{n.key}</strong>
+              <span className="leverage-title">{layout.nodes.find((x) => x.key === n.key)!.title}</span>
+              <span className="hint">
+                {n.directDependents} direct · {n.transitiveDependents} total
+              </span>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </>
+  );
+}
+
+function GraphLegend() {
+  return (
+    <div className="graph-legend" data-testid="graph-legend">
+      <span className="legend-item">
+        <span className="swatch tier-high" /> High leverage (unblocks 3+)
+      </span>
+      <span className="legend-item">
+        <span className="swatch tier-medium" /> Some leverage (1–2)
+      </span>
+      <span className="legend-item">
+        <span className="swatch tier-none" /> Blocks nothing
+      </span>
+      <span className="legend-item">
+        <span className="swatch is-done" /> Done
+      </span>
+    </div>
+  );
+}
+
+/** A cubic Bézier from the blocker's right edge to the blocked node's left edge. */
+function EdgePath({ edge }: { edge: LayoutEdge }) {
+  const dx = Math.max(28, (edge.x2 - edge.x1) / 2);
+  const d = `M ${edge.x1} ${edge.y1} C ${edge.x1 + dx} ${edge.y1}, ${edge.x2 - dx} ${edge.y2}, ${edge.x2} ${edge.y2}`;
+  return (
+    <path
+      d={d}
+      className={`dependency-edge${edge.fromHighLeverage ? ' high-leverage' : ''}`}
+      markerEnd="url(#arrow)"
+      fill="none"
+    />
+  );
+}
+
+function GraphNode({ node }: { node: LayoutNode }) {
+  const className = [
+    'graph-node',
+    `tier-${node.tier}`,
+    node.done ? 'is-done' : '',
+    node.cut ? 'is-cut' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  return (
+    <g
+      className={className}
+      transform={`translate(${node.x}, ${node.y})`}
+      data-testid={`graph-node-${node.key}`}
+      data-tier={node.tier}
+    >
+      <title>
+        {node.key} — {node.title}
+        {'\n'}
+        {node.points} pt · {node.status}
+        {'\n'}
+        unblocks {node.transitiveDependents} item{node.transitiveDependents === 1 ? '' : 's'} (
+        {node.directDependents} direct)
+      </title>
+      <rect width={node.width} height={node.height} rx={9} className="node-box" />
+      <text x={10} y={20} className="node-key">
+        {node.key}
+        {node.done ? ' ✓' : ''}
+      </text>
+      <text x={10} y={38} className="node-title">
+        {truncate(node.title, 20)}
+      </text>
+      <text x={node.width - 10} y={20} className="node-points" textAnchor="end">
+        {node.points}p
+      </text>
+      {node.transitiveDependents > 0 && (
+        <text x={node.width - 10} y={38} className="node-leverage" textAnchor="end">
+          ↳ {node.transitiveDependents}
+        </text>
+      )}
+    </g>
+  );
+}
+
+function truncate(text: string, max: number): string {
+  return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
+}
