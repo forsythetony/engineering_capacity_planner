@@ -1,16 +1,43 @@
 import Fastify from 'fastify';
 import { openDatabase } from './db/database.js';
-import { readDataset } from './db/persist.js';
+import { readDataset, writeDataset } from './db/persist.js';
+import { generateSyntheticDataset } from './importer/synthetic.js';
+
+export interface BuildServerOptions {
+  dbPath?: string;
+  /** Seed the database with synthetic data if it has no epics. Default true. */
+  seedIfEmpty?: boolean;
+}
 
 /**
- * Minimal localhost API. Phase 1 exposes just enough to confirm the imported
- * data is queryable; the timeline and capacity endpoints arrive in later
- * phases. The database path is read from `ECP_DB_PATH` (defaults to a local
- * file).
+ * Minimal localhost API serving the domain data to the frontend.
+ *
+ * The database is the source of truth; if it's empty on startup we seed it with
+ * the synthetic importer so `npm run dev` works with zero setup. A permissive
+ * CORS header lets the Vite dev server (a different origin) fetch directly.
  */
-export function buildServer(dbPath = process.env.ECP_DB_PATH ?? './data/ecp.db') {
+export function buildServer(options: BuildServerOptions = {}) {
+  const dbPath = options.dbPath ?? process.env.ECP_DB_PATH ?? './data/ecp.db';
+  const seedIfEmpty = options.seedIfEmpty ?? true;
+
   const app = Fastify({ logger: true });
   const db = openDatabase({ path: dbPath });
+
+  if (seedIfEmpty) {
+    const { n } = db.prepare('SELECT COUNT(*) AS n FROM epic').get() as { n: number };
+    if (n === 0) {
+      writeDataset(db, generateSyntheticDataset());
+      app.log.info('Seeded empty database with synthetic dataset');
+    }
+  }
+
+  // Permissive CORS — this is a single-user localhost tool, and read-only today.
+  app.addHook('onRequest', async (req, reply) => {
+    reply.header('Access-Control-Allow-Origin', '*');
+    reply.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    reply.header('Access-Control-Allow-Headers', 'Content-Type');
+    if (req.method === 'OPTIONS') reply.send();
+  });
 
   app.get('/health', async () => ({ status: 'ok' }));
 

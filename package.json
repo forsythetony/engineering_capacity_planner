@@ -20,7 +20,12 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "seed": "npm run seed --workspace @ecp/backend",
     "export:fixture": "npm run export:fixture --workspace @ecp/backend",
+    "dev": "concurrently -n backend,frontend -c blue,green \"npm run dev --workspace @ecp/backend\" \"npm run dev --workspace @ecp/frontend\"",
+    "dev:backend": "npm run dev --workspace @ecp/backend",
     "dev:frontend": "npm run dev --workspace @ecp/frontend",
     "e2e": "npm run e2e --workspace @ecp/frontend"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
   }
 }

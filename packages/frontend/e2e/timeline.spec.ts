@@ -9,6 +9,9 @@ test.describe('Calendar / timeline tab', () => {
     await expect(strip).toBeVisible();
     await expect(strip).toHaveAttribute('data-verdict', /green|yellow|red/);
 
+    // The data-source indicator reflects the plumbing (API vs bundled fallback).
+    await expect(page.getByTestId('data-source')).toBeVisible();
+
     // The timeline shows a today marker, the gating relevant day, and dev-complete.
     await expect(page.getByTestId('timeline')).toBeVisible();
     await expect(page.locator('.marker.today')).toBeVisible();

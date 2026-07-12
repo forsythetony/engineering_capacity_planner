@@ -80,6 +80,15 @@ body {
   margin-bottom: 18px;
 }
 
+.source-note {
+  font-size: 12px;
+  color: var(--muted);
+  margin: -6px 0 14px;
+}
+.source-note[data-source='api'] {
+  color: var(--green);
+}
+
 /* --- Status strip --- */
 .status-strip {
   display: flex;
