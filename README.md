@@ -59,11 +59,13 @@ An empty `.env` runs the app on synthetic data. Key knobs:
 | `VITE_PORT` / `VITE_API_TARGET` | `5173` / `http://127.0.0.1:3001` | Dev server + proxy target |
 | `JIRA_*` | — | Jira connection + mapping (used when `ECP_DATA_SOURCE=jira`) |
 
-**Pointing at Jira** (importer lands in Phase 7): set `ECP_DATA_SOURCE=jira` and
-fill the `JIRA_*` values (base URL, email, API token, project key, story-points
-field, "blocks" link type). The importer is selected by config alone — no code
-change — and fails fast listing the exact missing variables until Phase 7 lands
-its `fetch()`.
+**Pointing at Jira:** set `ECP_DATA_SOURCE=jira` and the three connection secrets
+(`JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`), then wire up the board, epic,
+and field mapping in-app via the **Connect to Jira** wizard on the Configuration
+tab. The importer is selected by config alone — no code change. For a
+step-by-step walkthrough (plus architecture and troubleshooting), see
+[**docs/jira-first-sync.md**](docs/jira-first-sync.md). To rehearse the whole
+flow offline with no credentials, run `ECP_JIRA_FAKE=true npm run dev`.
 
 **Security:** the SQLite database is the shareable unit, so **secrets never
 touch it**. The Jira API token lives only in the environment / `.env` (which is
