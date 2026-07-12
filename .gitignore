@@ -5,14 +5,20 @@ node_modules/
 dist/
 *.tsbuildinfo
 
-# SQLite databases (generated, not source of truth in the repo)
+# SQLite databases (generated, not source of truth in the repo).
+# Note: only match the DB files themselves — a bare `data/` rule would also
+# swallow source dirs like packages/frontend/src/data.
 *.db
 *.db-shm
 *.db-wal
-data/
+/data/
+/packages/*/data/
 
 # Test / coverage
 coverage/
+test-results/
+playwright-report/
+.playwright/
 
 # Logs
 *.log

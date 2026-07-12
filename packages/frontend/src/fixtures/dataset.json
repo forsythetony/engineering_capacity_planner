@@ -1,0 +1,800 @@
+{
+  "teams": [
+    {
+      "id": "team-platform",
+      "name": "Platform Team",
+      "sprintLengthDays": 14,
+      "sprintStartWeekday": 2,
+      "sprintAnchorDate": "2026-01-06",
+      "workingDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  ],
+  "members": [
+    {
+      "id": "M1",
+      "teamId": "team-platform",
+      "name": "Ada",
+      "baseVelocity": 12,
+      "active": true
+    },
+    {
+      "id": "M2",
+      "teamId": "team-platform",
+      "name": "Björn",
+      "baseVelocity": 8,
+      "active": true
+    },
+    {
+      "id": "M3",
+      "teamId": "team-platform",
+      "name": "Chen",
+      "baseVelocity": 11,
+      "active": true
+    },
+    {
+      "id": "M4",
+      "teamId": "team-platform",
+      "name": "Dara",
+      "baseVelocity": 14,
+      "active": true
+    },
+    {
+      "id": "M5",
+      "teamId": "team-platform",
+      "name": "Esteban",
+      "baseVelocity": 14,
+      "active": false
+    }
+  ],
+  "velocityOverrides": [
+    {
+      "id": "VO1",
+      "memberId": "M4",
+      "startDate": "2026-01-06",
+      "endDate": "2026-01-26",
+      "multiplier": 0.5
+    }
+  ],
+  "pto": [
+    {
+      "id": "PTO1",
+      "memberId": "M1",
+      "startDate": "2026-01-16",
+      "endDate": "2026-01-20"
+    },
+    {
+      "id": "PTO2",
+      "memberId": "M2",
+      "startDate": "2026-01-30",
+      "endDate": "2026-01-31"
+    }
+  ],
+  "oncall": [
+    {
+      "id": "OC1",
+      "memberId": "M3",
+      "startDate": "2026-01-06",
+      "endDate": "2026-01-19"
+    }
+  ],
+  "epics": [
+    {
+      "key": "CKT",
+      "title": "Checkout Revamp",
+      "teamId": "team-platform"
+    }
+  ],
+  "milestones": [
+    {
+      "id": "MS1",
+      "epicKey": "CKT",
+      "name": "Feature freeze",
+      "date": "2026-02-15",
+      "isGating": false
+    },
+    {
+      "id": "MS2",
+      "epicKey": "CKT",
+      "name": "First QA in stage pass",
+      "date": "2026-03-02",
+      "isGating": true
+    },
+    {
+      "id": "MS3",
+      "epicKey": "CKT",
+      "name": "Launch",
+      "date": "2026-03-22",
+      "isGating": false
+    }
+  ],
+  "stories": [
+    {
+      "key": "CKT-S1",
+      "epicKey": "CKT",
+      "title": "Foundations & data model"
+    },
+    {
+      "key": "CKT-S2",
+      "epicKey": "CKT",
+      "title": "Cart service API"
+    },
+    {
+      "key": "CKT-S3",
+      "epicKey": "CKT",
+      "title": "Payment integration"
+    },
+    {
+      "key": "CKT-S4",
+      "epicKey": "CKT",
+      "title": "Checkout UI"
+    },
+    {
+      "key": "CKT-S5",
+      "epicKey": "CKT",
+      "title": "Address & shipping"
+    },
+    {
+      "key": "CKT-S6",
+      "epicKey": "CKT",
+      "title": "Promotions & discounts"
+    },
+    {
+      "key": "CKT-S7",
+      "epicKey": "CKT",
+      "title": "Order confirmation"
+    },
+    {
+      "key": "CKT-S8",
+      "epicKey": "CKT",
+      "title": "Observability & metrics"
+    },
+    {
+      "key": "CKT-S9",
+      "epicKey": "CKT",
+      "title": "Error handling & retries"
+    },
+    {
+      "key": "CKT-S10",
+      "epicKey": "CKT",
+      "title": "Accessibility pass"
+    }
+  ],
+  "workItems": [
+    {
+      "key": "CKT-1",
+      "storyKey": "CKT-S1",
+      "title": "Fix analytics events",
+      "points": 8,
+      "status": "In Review",
+      "assigneeId": "M2"
+    },
+    {
+      "key": "CKT-2",
+      "storyKey": "CKT-S1",
+      "title": "Document currency formatting",
+      "points": 8,
+      "status": "Done",
+      "assigneeId": "M4"
+    },
+    {
+      "key": "CKT-3",
+      "storyKey": "CKT-S1",
+      "title": "Add tests for form validation",
+      "points": 5,
+      "status": "In Progress",
+      "assigneeId": "M4"
+    },
+    {
+      "key": "CKT-4",
+      "storyKey": "CKT-S3",
+      "title": "Refactor session cache",
+      "points": 3,
+      "status": "Done",
+      "assigneeId": "M3"
+    },
+    {
+      "key": "CKT-5",
+      "storyKey": "CKT-S7",
+      "title": "Wire up card tokenization",
+      "points": 8,
+      "status": "To Do",
+      "assigneeId": "M1"
+    },
+    {
+      "key": "CKT-6",
+      "storyKey": "CKT-S8",
+      "title": "Design tax calculation",
+      "points": 2,
+      "status": "To Do",
+      "assigneeId": "M3"
+    },
+    {
+      "key": "CKT-7",
+      "storyKey": "CKT-S5",
+      "title": "Refactor retry backoff",
+      "points": 5,
+      "status": "Done",
+      "assigneeId": "M2"
+    },
+    {
+      "key": "CKT-8",
+      "storyKey": "CKT-S10",
+      "title": "Fix confirmation email",
+      "points": 5,
+      "status": "To Do",
+      "assigneeId": null
+    },
+    {
+      "key": "CKT-9",
+      "storyKey": "CKT-S5",
+      "title": "Implement retry backoff",
+      "points": 2,
+      "status": "To Do",
+      "assigneeId": null
+    },
+    {
+      "key": "CKT-10",
+      "storyKey": "CKT-S5",
+      "title": "Design confirmation email",
+      "points": 3,
+      "status": "In Review",
+      "assigneeId": "M1"
+    },
+    {
+      "key": "CKT-11",
+      "storyKey": "CKT-S2",
+      "title": "Optimize analytics events",
+      "points": 2,
+      "status": "Done",
+      "assigneeId": "M2"
+    },
+    {
+      "key": "CKT-12",
+      "storyKey": "CKT-S5",
+      "title": "Optimize retry backoff",
+      "points": 5,
+      "status": "To Do",
+      "assigneeId": "M1"
+    },
+    {
+      "key": "CKT-13",
+      "storyKey": "CKT-S3",
+      "title": "Add tests for form validation",
+      "points": 3,
+      "status": "Done",
+      "assigneeId": "M1"
+    },
+    {
+      "key": "CKT-14",
+      "storyKey": "CKT-S2",
+      "title": "Implement card tokenization",
+      "points": 5,
+      "status": "Done",
+      "assigneeId": "M1"
+    },
+    {
+      "key": "CKT-15",
+      "storyKey": "CKT-S5",
+      "title": "Optimize retry backoff",
+      "points": 2,
+      "status": "In Progress",
+      "assigneeId": "M2"
+    },
+    {
+      "key": "CKT-16",
+      "storyKey": "CKT-S1",
+      "title": "Fix promo code parser",
+      "points": 8,
+      "status": "Done",
+      "assigneeId": "M3"
+    },
+    {
+      "key": "CKT-17",
+      "storyKey": "CKT-S4",
+      "title": "Optimize analytics events",
+      "points": 2,
+      "status": "To Do",
+      "assigneeId": "M2"
+    },
+    {
+      "key": "CKT-18",
+      "storyKey": "CKT-S8",
+      "title": "Implement error boundary",
+      "points": 1,
+      "status": "To Do",
+      "assigneeId": null
+    },
+    {
+      "key": "CKT-19",
+      "storyKey": "CKT-S3",
+      "title": "Document retry backoff",
+      "points": 2,
+      "status": "To Do",
+      "assigneeId": null
+    },
+    {
+      "key": "CKT-20",
+      "storyKey": "CKT-S2",
+      "title": "Fix retry backoff",
+      "points": 5,
+      "status": "In Progress",
+      "assigneeId": "M2"
+    },
+    {
+      "key": "CKT-21",
+      "storyKey": "CKT-S1",
+      "title": "Document tax calculation",
+      "points": 2,
+      "status": "In Progress",
+      "assigneeId": "M4"
+    },
+    {
+      "key": "CKT-22",
+      "storyKey": "CKT-S5",
+      "title": "Implement retry backoff",
+      "points": 2,
+      "status": "In Review",
+      "assigneeId": "M3"
+    },
+    {
+      "key": "CKT-23",
+      "storyKey": "CKT-S6",
+      "title": "Add tests for inventory check",
+      "points": 2,
+      "status": "Done",
+      "assigneeId": "M3"
+    },
+    {
+      "key": "CKT-24",
+      "storyKey": "CKT-S8",
+      "title": "Design rate limiter",
+      "points": 3,
+      "status": "To Do",
+      "assigneeId": "M3"
+    },
+    {
+      "key": "CKT-25",
+      "storyKey": "CKT-S3",
+      "title": "Fix idempotency keys",
+      "points": 1,
+      "status": "To Do",
+      "assigneeId": "M1"
+    },
+    {
+      "key": "CKT-26",
+      "storyKey": "CKT-S3",
+      "title": "Implement card tokenization",
+      "points": 3,
+      "status": "To Do",
+      "assigneeId": "M4"
+    },
+    {
+      "key": "CKT-27",
+      "storyKey": "CKT-S7",
+      "title": "Design inventory check",
+      "points": 1,
+      "status": "In Review",
+      "assigneeId": "M1"
+    },
+    {
+      "key": "CKT-28",
+      "storyKey": "CKT-S6",
+      "title": "Optimize analytics events",
+      "points": 5,
+      "status": "To Do",
+      "assigneeId": null
+    },
+    {
+      "key": "CKT-29",
+      "storyKey": "CKT-S8",
+      "title": "Wire up rate limiter",
+      "points": 1,
+      "status": "Done",
+      "assigneeId": "M1"
+    },
+    {
+      "key": "CKT-30",
+      "storyKey": "CKT-S2",
+      "title": "Refactor idempotency keys",
+      "points": 3,
+      "status": "In Progress",
+      "assigneeId": "M3"
+    },
+    {
+      "key": "CKT-31",
+      "storyKey": "CKT-S8",
+      "title": "Implement address validation",
+      "points": 8,
+      "status": "In Review",
+      "assigneeId": "M3"
+    },
+    {
+      "key": "CKT-32",
+      "storyKey": "CKT-S5",
+      "title": "Design cart totals endpoint",
+      "points": 3,
+      "status": "To Do",
+      "assigneeId": "M3"
+    },
+    {
+      "key": "CKT-33",
+      "storyKey": "CKT-S8",
+      "title": "Fix error boundary",
+      "points": 1,
+      "status": "To Do",
+      "assigneeId": "M3"
+    },
+    {
+      "key": "CKT-34",
+      "storyKey": "CKT-S10",
+      "title": "Implement form validation",
+      "points": 3,
+      "status": "In Review",
+      "assigneeId": "M4"
+    },
+    {
+      "key": "CKT-35",
+      "storyKey": "CKT-S3",
+      "title": "Design inventory check",
+      "points": 8,
+      "status": "To Do",
+      "assigneeId": "M3"
+    },
+    {
+      "key": "CKT-36",
+      "storyKey": "CKT-S8",
+      "title": "Implement confirmation email",
+      "points": 1,
+      "status": "To Do",
+      "assigneeId": "M2"
+    },
+    {
+      "key": "CKT-37",
+      "storyKey": "CKT-S2",
+      "title": "Wire up error boundary",
+      "points": 3,
+      "status": "In Review",
+      "assigneeId": "M4"
+    },
+    {
+      "key": "CKT-38",
+      "storyKey": "CKT-S4",
+      "title": "Refactor form validation",
+      "points": 1,
+      "status": "In Progress",
+      "assigneeId": "M3"
+    },
+    {
+      "key": "CKT-39",
+      "storyKey": "CKT-S5",
+      "title": "Implement loading skeletons",
+      "points": 5,
+      "status": "To Do",
+      "assigneeId": "M3"
+    },
+    {
+      "key": "CKT-40",
+      "storyKey": "CKT-S3",
+      "title": "Fix order state machine",
+      "points": 8,
+      "status": "To Do",
+      "assigneeId": "M4"
+    },
+    {
+      "key": "CKT-41",
+      "storyKey": "CKT-S2",
+      "title": "Refactor currency formatting",
+      "points": 3,
+      "status": "In Progress",
+      "assigneeId": "M1"
+    },
+    {
+      "key": "CKT-42",
+      "storyKey": "CKT-S8",
+      "title": "Refactor address validation",
+      "points": 3,
+      "status": "To Do",
+      "assigneeId": "M3"
+    },
+    {
+      "key": "CKT-43",
+      "storyKey": "CKT-S6",
+      "title": "Wire up retry backoff",
+      "points": 8,
+      "status": "To Do",
+      "assigneeId": null
+    },
+    {
+      "key": "CKT-44",
+      "storyKey": "CKT-S2",
+      "title": "Implement rate limiter",
+      "points": 8,
+      "status": "In Review",
+      "assigneeId": "M2"
+    },
+    {
+      "key": "CKT-45",
+      "storyKey": "CKT-S3",
+      "title": "Refactor rate limiter",
+      "points": 1,
+      "status": "Done",
+      "assigneeId": "M4"
+    },
+    {
+      "key": "CKT-46",
+      "storyKey": "CKT-S1",
+      "title": "Wire up rate limiter",
+      "points": 5,
+      "status": "In Review",
+      "assigneeId": "M3"
+    },
+    {
+      "key": "CKT-47",
+      "storyKey": "CKT-S7",
+      "title": "Wire up error boundary",
+      "points": 3,
+      "status": "Done",
+      "assigneeId": "M4"
+    },
+    {
+      "key": "CKT-48",
+      "storyKey": "CKT-S9",
+      "title": "Wire up analytics events",
+      "points": 3,
+      "status": "To Do",
+      "assigneeId": "M4"
+    },
+    {
+      "key": "CKT-49",
+      "storyKey": "CKT-S3",
+      "title": "Implement error boundary",
+      "points": 3,
+      "status": "In Review",
+      "assigneeId": "M2"
+    },
+    {
+      "key": "CKT-50",
+      "storyKey": "CKT-S10",
+      "title": "Implement error boundary",
+      "points": 3,
+      "status": "Done",
+      "assigneeId": "M1"
+    }
+  ],
+  "dependencies": [
+    {
+      "id": "D1",
+      "blockerItemKey": "CKT-1",
+      "blockedItemKey": "CKT-5"
+    },
+    {
+      "id": "D2",
+      "blockerItemKey": "CKT-4",
+      "blockedItemKey": "CKT-6"
+    },
+    {
+      "id": "D3",
+      "blockerItemKey": "CKT-1",
+      "blockedItemKey": "CKT-7"
+    },
+    {
+      "id": "D4",
+      "blockerItemKey": "CKT-2",
+      "blockedItemKey": "CKT-8"
+    },
+    {
+      "id": "D5",
+      "blockerItemKey": "CKT-2",
+      "blockedItemKey": "CKT-9"
+    },
+    {
+      "id": "D6",
+      "blockerItemKey": "CKT-2",
+      "blockedItemKey": "CKT-11"
+    },
+    {
+      "id": "D7",
+      "blockerItemKey": "CKT-3",
+      "blockedItemKey": "CKT-12"
+    },
+    {
+      "id": "D8",
+      "blockerItemKey": "CKT-9",
+      "blockedItemKey": "CKT-13"
+    },
+    {
+      "id": "D9",
+      "blockerItemKey": "CKT-9",
+      "blockedItemKey": "CKT-16"
+    },
+    {
+      "id": "D10",
+      "blockerItemKey": "CKT-1",
+      "blockedItemKey": "CKT-17"
+    },
+    {
+      "id": "D11",
+      "blockerItemKey": "CKT-3",
+      "blockedItemKey": "CKT-18"
+    },
+    {
+      "id": "D12",
+      "blockerItemKey": "CKT-1",
+      "blockedItemKey": "CKT-20"
+    },
+    {
+      "id": "D13",
+      "blockerItemKey": "CKT-2",
+      "blockedItemKey": "CKT-21"
+    },
+    {
+      "id": "D14",
+      "blockerItemKey": "CKT-1",
+      "blockedItemKey": "CKT-23"
+    },
+    {
+      "id": "D15",
+      "blockerItemKey": "CKT-2",
+      "blockedItemKey": "CKT-24"
+    },
+    {
+      "id": "D16",
+      "blockerItemKey": "CKT-15",
+      "blockedItemKey": "CKT-24"
+    },
+    {
+      "id": "D17",
+      "blockerItemKey": "CKT-2",
+      "blockedItemKey": "CKT-25"
+    },
+    {
+      "id": "D18",
+      "blockerItemKey": "CKT-6",
+      "blockedItemKey": "CKT-25"
+    },
+    {
+      "id": "D19",
+      "blockerItemKey": "CKT-1",
+      "blockedItemKey": "CKT-26"
+    },
+    {
+      "id": "D20",
+      "blockerItemKey": "CKT-2",
+      "blockedItemKey": "CKT-28"
+    },
+    {
+      "id": "D21",
+      "blockerItemKey": "CKT-22",
+      "blockedItemKey": "CKT-28"
+    },
+    {
+      "id": "D22",
+      "blockerItemKey": "CKT-1",
+      "blockedItemKey": "CKT-29"
+    },
+    {
+      "id": "D23",
+      "blockerItemKey": "CKT-1",
+      "blockedItemKey": "CKT-30"
+    },
+    {
+      "id": "D24",
+      "blockerItemKey": "CKT-2",
+      "blockedItemKey": "CKT-32"
+    },
+    {
+      "id": "D25",
+      "blockerItemKey": "CKT-2",
+      "blockedItemKey": "CKT-33"
+    },
+    {
+      "id": "D26",
+      "blockerItemKey": "CKT-21",
+      "blockedItemKey": "CKT-33"
+    },
+    {
+      "id": "D27",
+      "blockerItemKey": "CKT-1",
+      "blockedItemKey": "CKT-35"
+    },
+    {
+      "id": "D28",
+      "blockerItemKey": "CKT-23",
+      "blockedItemKey": "CKT-35"
+    },
+    {
+      "id": "D29",
+      "blockerItemKey": "CKT-3",
+      "blockedItemKey": "CKT-37"
+    },
+    {
+      "id": "D30",
+      "blockerItemKey": "CKT-1",
+      "blockedItemKey": "CKT-38"
+    },
+    {
+      "id": "D31",
+      "blockerItemKey": "CKT-2",
+      "blockedItemKey": "CKT-39"
+    },
+    {
+      "id": "D32",
+      "blockerItemKey": "CKT-6",
+      "blockedItemKey": "CKT-42"
+    },
+    {
+      "id": "D33",
+      "blockerItemKey": "CKT-2",
+      "blockedItemKey": "CKT-43"
+    },
+    {
+      "id": "D34",
+      "blockerItemKey": "CKT-2",
+      "blockedItemKey": "CKT-44"
+    },
+    {
+      "id": "D35",
+      "blockerItemKey": "CKT-40",
+      "blockedItemKey": "CKT-46"
+    },
+    {
+      "id": "D36",
+      "blockerItemKey": "CKT-2",
+      "blockedItemKey": "CKT-47"
+    },
+    {
+      "id": "D37",
+      "blockerItemKey": "CKT-2",
+      "blockedItemKey": "CKT-48"
+    },
+    {
+      "id": "D38",
+      "blockerItemKey": "CKT-45",
+      "blockedItemKey": "CKT-50"
+    }
+  ],
+  "settings": [
+    {
+      "key": "oncall_multiplier",
+      "scope": "global",
+      "scopeId": null,
+      "value": "0.5"
+    },
+    {
+      "key": "green_min_buffer_days",
+      "scope": "global",
+      "scopeId": null,
+      "value": "5"
+    },
+    {
+      "key": "jira_flavor",
+      "scope": "global",
+      "scopeId": null,
+      "value": "null"
+    },
+    {
+      "key": "jira_story_points_field",
+      "scope": "global",
+      "scopeId": null,
+      "value": "null"
+    },
+    {
+      "key": "jira_project_key",
+      "scope": "global",
+      "scopeId": null,
+      "value": "null"
+    },
+    {
+      "key": "jira_blocks_link_type",
+      "scope": "global",
+      "scopeId": null,
+      "value": "null"
+    }
+  ]
+}

@@ -11,12 +11,16 @@
   "workspaces": [
     "packages/shared",
     "packages/engine",
-    "packages/backend"
+    "packages/backend",
+    "packages/frontend"
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "seed": "npm run seed --workspace @ecp/backend"
+    "seed": "npm run seed --workspace @ecp/backend",
+    "export:fixture": "npm run export:fixture --workspace @ecp/backend",
+    "dev:frontend": "npm run dev --workspace @ecp/frontend",
+    "e2e": "npm run e2e --workspace @ecp/frontend"
   }
 }

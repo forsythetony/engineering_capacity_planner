@@ -1,0 +1,111 @@
+import type {
+  DomainDataset,
+  Epic,
+  EpicMilestone,
+  IsoDate,
+  Oncall,
+  Pto,
+  Team,
+  TeamMember,
+  UserStory,
+  VelocityOverride,
+  WorkItem,
+} from '@ecp/shared';
+import { project, readEngineConfig, type ProjectionResult } from '@ecp/engine';
+
+/** Everything the timeline needs about a single epic, pulled from the dataset. */
+export interface EpicScope {
+  epic: Epic;
+  team: Team;
+  gating: EpicMilestone;
+  /** All of the epic's milestones, ascending by date. */
+  milestones: EpicMilestone[];
+  /** The epic's user stories (the grouping layer above work items). */
+  stories: UserStory[];
+  workItems: WorkItem[];
+  members: TeamMember[];
+  pto: Pto[];
+  oncall: Oncall[];
+  velocityOverrides: VelocityOverride[];
+  /** Engine knob defaults read from the dataset's settings. */
+  defaults: { greenMinBufferDays: number; oncallMultiplier: number };
+}
+
+/** The live, user-editable inputs that drive a re-projection. */
+export interface Scenario {
+  today: IsoDate;
+  /** Items removed from the plan ("cut this ticket"). */
+  cutItemKeys: ReadonlySet<string>;
+  /** Items forced to Done (mark complete). */
+  doneItemKeys: ReadonlySet<string>;
+  greenMinBufferDays: number;
+  oncallMultiplier: number;
+}
+
+/** Extract and pre-scope one epic's inputs from the full dataset. */
+export function scopeEpic(dataset: DomainDataset, epicKey: string): EpicScope {
+  const epic = dataset.epics.find((e) => e.key === epicKey);
+  if (!epic) throw new Error(`Epic ${epicKey} not found`);
+  const team = dataset.teams.find((t) => t.id === epic.teamId);
+  if (!team) throw new Error(`Team ${epic.teamId} not found`);
+  const gating = dataset.milestones.find((m) => m.epicKey === epicKey && m.isGating);
+  if (!gating) throw new Error(`Epic ${epicKey} has no gating milestone`);
+
+  const milestones = dataset.milestones
+    .filter((m) => m.epicKey === epicKey)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const stories = dataset.stories.filter((s) => s.epicKey === epicKey);
+  const storyKeys = new Set(stories.map((s) => s.key));
+  const workItems = dataset.workItems
+    .filter((w) => storyKeys.has(w.storyKey))
+    .sort((a, b) => a.key.localeCompare(b.key, undefined, { numeric: true }));
+
+  const members = dataset.members.filter((m) => m.teamId === team.id);
+  const memberIds = new Set(members.map((m) => m.id));
+  const pto = dataset.pto.filter((p) => memberIds.has(p.memberId));
+  const oncall = dataset.oncall.filter((o) => memberIds.has(o.memberId));
+  const velocityOverrides = dataset.velocityOverrides.filter((v) => memberIds.has(v.memberId));
+
+  const cfg = readEngineConfig(dataset);
+  return {
+    epic,
+    team,
+    gating,
+    milestones,
+    stories,
+    workItems,
+    members,
+    pto,
+    oncall,
+    velocityOverrides,
+    defaults: {
+      greenMinBufferDays: cfg.greenMinBufferDays ?? 5,
+      oncallMultiplier: cfg.oncallMultiplier ?? 0.5,
+    },
+  };
+}
+
+/** Apply a scenario's cuts / mark-done to the epic's work items. */
+export function effectiveWorkItems(scope: EpicScope, scenario: Scenario): WorkItem[] {
+  return scope.workItems
+    .filter((w) => !scenario.cutItemKeys.has(w.key))
+    .map((w) => (scenario.doneItemKeys.has(w.key) ? { ...w, status: 'Done' } : w));
+}
+
+/** Re-run the pure engine for the current scenario. */
+export function runScenario(scope: EpicScope, scenario: Scenario): ProjectionResult {
+  return project({
+    today: scenario.today,
+    team: scope.team,
+    members: scope.members,
+    pto: scope.pto,
+    oncall: scope.oncall,
+    velocityOverrides: scope.velocityOverrides,
+    workItems: effectiveWorkItems(scope, scenario),
+    gatingDate: scope.gating.date,
+    config: {
+      greenMinBufferDays: scenario.greenMinBufferDays,
+      oncallMultiplier: scenario.oncallMultiplier,
+    },
+  });
+}
