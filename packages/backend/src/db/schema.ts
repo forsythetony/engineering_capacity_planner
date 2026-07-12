@@ -24,7 +24,10 @@ CREATE TABLE IF NOT EXISTS team_member (
   team_id       TEXT NOT NULL REFERENCES team(id) ON DELETE CASCADE,
   name          TEXT NOT NULL,
   base_velocity REAL NOT NULL,
-  active        INTEGER NOT NULL DEFAULT 1
+  active        INTEGER NOT NULL DEFAULT 1,
+  -- Jira accountId this member is linked to (NULL for a purely local member).
+  -- Lets a synced assignee map back onto a hand-created person (project plan §7).
+  jira_account_id TEXT
 );
 
 CREATE TABLE IF NOT EXISTS velocity_override (

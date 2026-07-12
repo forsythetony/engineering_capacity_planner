@@ -9,6 +9,7 @@ import type {
   JiraIssueLinkType,
   JiraSearchResult,
   JiraSprint,
+  JiraUser,
 } from './types.js';
 
 /** Connection details for a real Jira Cloud site. Secrets live in env only. */
@@ -65,6 +66,18 @@ export class HttpJiraClient implements JiraClient {
     // 204 No Content (e.g. createIssueLink) has an empty body.
     if (res.status === 204) return undefined as T;
     return (await res.json()) as T;
+  }
+
+  getCurrentUser(): Promise<JiraUser> {
+    return this.request<JiraUser>('GET', '/rest/api/3/myself');
+  }
+
+  searchUsers(query: string): Promise<JiraUser[]> {
+    // `query` matches display name / email; cap the result set for a picker.
+    return this.request<JiraUser[]>('GET', '/rest/api/3/user/search', undefined, {
+      query,
+      maxResults: 20,
+    });
   }
 
   listFields(): Promise<JiraField[]> {

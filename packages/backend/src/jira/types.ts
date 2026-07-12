@@ -42,6 +42,8 @@ export interface JiraUser {
   accountId: string;
   displayName: string;
   active?: boolean;
+  /** Present on `/myself` and (when visible) user search; absent otherwise. */
+  emailAddress?: string;
 }
 
 export interface JiraIssueRef {
@@ -100,6 +102,8 @@ export interface JiraBoard {
   id: number;
   name: string;
   type: string;
+  /** Where the board lives; carries the project key for `/board` responses. */
+  location?: { projectKey?: string; projectName?: string };
 }
 
 /** A sprint from `GET /rest/agile/1.0/board/{boardId}/sprint`. */

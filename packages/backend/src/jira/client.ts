@@ -8,6 +8,7 @@ import type {
   JiraIssueLinkType,
   JiraSearchResult,
   JiraSprint,
+  JiraUser,
 } from './types.js';
 
 /**
@@ -23,6 +24,16 @@ import type {
  */
 export interface JiraClient {
   // --- Read (import) -------------------------------------------------------
+  /**
+   * `GET /rest/api/3/myself` — the authenticated user. Doubles as a cheap
+   * connectivity + credentials check for the setup wizard's "Connect" step.
+   */
+  getCurrentUser(): Promise<JiraUser>;
+  /**
+   * `GET /rest/api/3/user/search?query=` — people-picker search, used by the
+   * setup wizard to find and link team members to their Jira accounts.
+   */
+  searchUsers(query: string): Promise<JiraUser[]>;
   /** `GET /rest/api/3/field` — the field catalog that powers mapping. */
   listFields(): Promise<JiraField[]>;
   /** `GET /rest/api/3/issueLinkType` — used to resolve the "blocks" link type. */

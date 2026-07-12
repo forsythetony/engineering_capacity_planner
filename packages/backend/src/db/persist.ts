@@ -19,8 +19,8 @@ export function writeDataset(db: Db, dataset: DomainDataset): void {
      VALUES (@id, @name, @sprintLengthDays, @sprintStartWeekday, @sprintAnchorDate, @workingDays)`,
   );
   const insertMember = db.prepare(
-    `INSERT INTO team_member (id, team_id, name, base_velocity, active)
-     VALUES (@id, @teamId, @name, @baseVelocity, @active)`,
+    `INSERT INTO team_member (id, team_id, name, base_velocity, active, jira_account_id)
+     VALUES (@id, @teamId, @name, @baseVelocity, @active, @jiraAccountId)`,
   );
   const insertVelocity = db.prepare(
     `INSERT INTO velocity_override (id, member_id, start_date, end_date, multiplier, note)
@@ -71,7 +71,9 @@ export function writeDataset(db: Db, dataset: DomainDataset): void {
     for (const t of data.teams) {
       insertTeam.run({ ...t, workingDays: JSON.stringify(t.workingDays) });
     }
-    for (const m of data.members) insertMember.run({ ...m, active: bool(m.active) });
+    for (const m of data.members) {
+      insertMember.run({ ...m, active: bool(m.active), jiraAccountId: m.jiraAccountId ?? null });
+    }
     for (const v of data.velocityOverrides) insertVelocity.run({ ...v, note: v.note ?? null });
     for (const p of data.pto) insertPto.run({ ...p, note: p.note ?? null });
     for (const o of data.oncall) insertOncall.run({ ...o, note: o.note ?? null });
@@ -115,6 +117,7 @@ export function readDataset(db: Db): DomainDataset {
         name: r.name,
         baseVelocity: r.base_velocity,
         active: r.active === 1,
+        jiraAccountId: r.jira_account_id ?? null,
       })),
     velocityOverrides: db
       .prepare('SELECT * FROM velocity_override')

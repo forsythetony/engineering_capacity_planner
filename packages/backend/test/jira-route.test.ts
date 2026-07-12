@@ -77,3 +77,60 @@ describe('GET /api/jira/sample', () => {
     expect(res.json().error).toMatch(/project key/i);
   });
 });
+
+describe('Jira setup wizard endpoints', () => {
+  it('GET /api/jira/connection reports the authenticated user', async () => {
+    app = await jiraServer(await seedFakeBoard());
+    const res = await app.inject({ method: 'GET', url: '/api/jira/connection' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ connected: true, displayName: 'Demo User' });
+  });
+
+  it('GET /api/jira/boards lists boards and filters by name', async () => {
+    app = await jiraServer(await seedFakeBoard());
+    const all = await app.inject({ method: 'GET', url: '/api/jira/boards' });
+    expect(all.statusCode).toBe(200);
+    expect(all.json().boards).toEqual([
+      { id: 1, name: 'Board', type: 'scrum', projectKey: 'CKT' },
+    ]);
+    // A non-matching filter yields nothing.
+    const none = await app.inject({ method: 'GET', url: '/api/jira/boards?q=zzz' });
+    expect(none.json().boards).toEqual([]);
+  });
+
+  it('GET /api/jira/epics returns epics under the project, filtered by text', async () => {
+    app = await jiraServer(await seedFakeBoard());
+    const res = await app.inject({ method: 'GET', url: '/api/jira/epics?project=CKT' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().epics).toEqual([{ key: 'CKT-1', summary: 'Checkout Revamp' }]);
+    // Filter by summary text.
+    const hit = await app.inject({ method: 'GET', url: '/api/jira/epics?project=CKT&q=checkout' });
+    expect(hit.json().epics).toHaveLength(1);
+    const miss = await app.inject({ method: 'GET', url: '/api/jira/epics?project=CKT&q=nope' });
+    expect(miss.json().epics).toEqual([]);
+  });
+
+  it('GET /api/jira/users searches the people picker', async () => {
+    // A board whose issue carries an assignee, plus an extra directory user.
+    const jira = new FakeJiraClient({
+      users: [{ accountId: 'acc-grace', displayName: 'Grace Hopper', emailAddress: 'grace@example.com' }],
+    });
+    await jira.createIssue({
+      fields: {
+        project: { key: 'CKT' }, issuetype: { name: 'Story' }, summary: 'Task',
+        assignee: { accountId: 'acc-ada', displayName: 'Ada Lovelace' },
+      },
+    });
+    app = await jiraServer(jira);
+
+    const all = await app.inject({ method: 'GET', url: '/api/jira/users' });
+    expect(all.statusCode).toBe(200);
+    const names = all.json().users.map((u: any) => u.displayName).sort();
+    expect(names).toEqual(['Ada Lovelace', 'Grace Hopper']);
+
+    const filtered = await app.inject({ method: 'GET', url: '/api/jira/users?q=grace' });
+    expect(filtered.json().users).toEqual([
+      { accountId: 'acc-grace', displayName: 'Grace Hopper', email: 'grace@example.com' },
+    ]);
+  });
+});

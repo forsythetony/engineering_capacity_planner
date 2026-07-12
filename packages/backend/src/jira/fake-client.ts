@@ -11,6 +11,7 @@ import type {
   JiraSearchResult,
   JiraSprint,
   JiraStatus,
+  JiraUser,
 } from './types.js';
 
 /** A realistic default field catalog (Story Points + Sprint as custom fields). */
@@ -58,10 +59,21 @@ function project(fields: JiraIssueFields, requested: string[] | undefined): Jira
   return out;
 }
 
+/** The authenticated user reported by the fake's `getCurrentUser()`. */
+export const DEFAULT_CURRENT_USER: JiraUser = {
+  accountId: 'acc-self',
+  displayName: 'Demo User',
+  emailAddress: 'demo@example.com',
+  active: true,
+};
+
 export interface FakeJiraOptions {
   fields?: JiraField[];
   linkTypes?: JiraIssueLinkType[];
   boards?: JiraBoard[];
+  /** Extra directory users searchable by `searchUsers` (beyond issue assignees). */
+  users?: JiraUser[];
+  currentUser?: JiraUser;
 }
 
 /**
@@ -79,6 +91,8 @@ export class FakeJiraClient implements JiraClient {
   private readonly fields: JiraField[];
   private readonly linkTypes: JiraIssueLinkType[];
   private readonly boards: JiraBoard[];
+  private readonly directoryUsers: JiraUser[];
+  private readonly currentUser: JiraUser;
   private readonly issues = new Map<string, JiraIssue>();
   private readonly sprintsByBoard = new Map<number, JiraSprint[]>();
   private readonly counters = new Map<string, number>();
@@ -87,7 +101,11 @@ export class FakeJiraClient implements JiraClient {
   constructor(options: FakeJiraOptions = {}) {
     this.fields = options.fields ?? DEFAULT_FIELD_CATALOG;
     this.linkTypes = options.linkTypes ?? DEFAULT_LINK_TYPES;
-    this.boards = options.boards ?? [{ id: 1, name: 'Board', type: 'scrum' }];
+    this.boards = options.boards ?? [
+      { id: 1, name: 'Board', type: 'scrum', location: { projectKey: 'CKT' } },
+    ];
+    this.directoryUsers = options.users ?? [];
+    this.currentUser = options.currentUser ?? DEFAULT_CURRENT_USER;
   }
 
   // --- Test/seed helpers ---------------------------------------------------
@@ -106,6 +124,28 @@ export class FakeJiraClient implements JiraClient {
   }
 
   // --- Read ----------------------------------------------------------------
+  async getCurrentUser(): Promise<JiraUser> {
+    return { ...this.currentUser };
+  }
+
+  /** Assignees on stored issues + any injected directory users, deduped. */
+  private knownUsers(): JiraUser[] {
+    const byId = new Map<string, JiraUser>();
+    for (const issue of this.issues.values()) {
+      const a = issue.fields.assignee as JiraUser | null | undefined;
+      if (a?.accountId) byId.set(a.accountId, a);
+    }
+    for (const u of this.directoryUsers) byId.set(u.accountId, u);
+    return [...byId.values()];
+  }
+
+  async searchUsers(query: string): Promise<JiraUser[]> {
+    const q = query.trim().toLowerCase();
+    return this.knownUsers()
+      .filter((u) => q === '' || u.displayName.toLowerCase().includes(q))
+      .map((u) => ({ ...u }));
+  }
+
   async listFields(): Promise<JiraField[]> {
     return this.fields.map((f) => ({ ...f }));
   }

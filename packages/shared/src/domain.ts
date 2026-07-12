@@ -50,6 +50,14 @@ export interface TeamMember {
   /** Baseline velocity in story points per person per sprint. */
   baseVelocity: number;
   active: boolean;
+  /**
+   * The Jira `accountId` this member is linked to, or `null` for a purely local
+   * member. The link is how a synced assignee maps back onto a person the user
+   * set up by hand (name, velocity, PTO), so imports update the existing member
+   * instead of creating a duplicate. Members imported straight from Jira carry
+   * their own `accountId` here.
+   */
+  jiraAccountId?: string | null;
 }
 
 /**

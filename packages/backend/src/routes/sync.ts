@@ -4,6 +4,7 @@
  * the Gantt placements and capacity config (see {@link reconcileDataset}). This
  * is what the frontend's "Sync" button triggers.
  */
+import { SETTING_KEYS } from '@ecp/shared';
 import type { FastifyInstance } from 'fastify';
 import type { AppConfig } from '../config.js';
 import type { Db } from '../db/database.js';
@@ -13,6 +14,14 @@ import { createImporter } from '../importer/factory.js';
 import { HttpError } from '../http-error.js';
 import type { JiraClient } from '../jira/client.js';
 import { MappingError } from '../jira/mapping.js';
+
+/** Stamp the last-successful-sync time (ISO), powering the nav Sync button. */
+function recordSyncTime(db: Db, iso: string): void {
+  db.prepare(
+    `INSERT INTO settings (key, scope, scope_id, value) VALUES (?, 'global', '', ?)
+     ON CONFLICT(key, scope, scope_id) DO UPDATE SET value = excluded.value`,
+  ).run(SETTING_KEYS.LAST_SYNCED_AT, JSON.stringify(iso));
+}
 
 export function registerSyncRoutes(
   app: FastifyInstance,
@@ -40,6 +49,8 @@ export function registerSyncRoutes(
 
     const { merged, summary } = reconcileDataset(current, incoming);
     writeDataset(db, merged);
-    return { source: config.dataSource, summary };
+    const syncedAt = new Date().toISOString();
+    recordSyncTime(db, syncedAt);
+    return { source: config.dataSource, summary, syncedAt };
   });
 }

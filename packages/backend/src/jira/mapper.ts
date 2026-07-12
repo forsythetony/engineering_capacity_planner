@@ -139,6 +139,7 @@ export function datasetFromJira(input: JiraDatasetInput): DomainDataset {
         name: assignee.displayName,
         baseVelocity: DEFAULT_BASE_VELOCITY,
         active: assignee.active ?? true,
+        jiraAccountId: assignee.accountId,
       });
     }
 

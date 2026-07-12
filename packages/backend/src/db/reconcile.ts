@@ -59,25 +59,48 @@ export function reconcileDataset(current: DomainDataset, incoming: DomainDataset
     }
   }
 
-  // --- Members: accrete. Existing members keep local capacity attributes
-  //     (base velocity, active); Jira refreshes the display name. New Jira
-  //     assignees are added with their imported defaults.
-  const mergedMembersById = new Map<string, TeamMember>(current.members.map((m) => [m.id, { ...m }]));
+  // --- Members: accrete, matched by Jira account link. Existing members keep
+  //     their local capacity attributes (base velocity, active, id) and local
+  //     PTO/on-call; Jira only refreshes the display name. A member the user
+  //     set up by hand and linked to a Jira account (jiraAccountId) absorbs the
+  //     matching assignee instead of spawning a duplicate. Unmatched assignees
+  //     are added with their imported defaults.
+  const mergedMembers: TeamMember[] = current.members.map((m) => ({ ...m }));
+  const byAccount = new Map<string, TeamMember>();
+  for (const m of mergedMembers) {
+    if (m.jiraAccountId) byAccount.set(m.jiraAccountId, m);
+  }
+  // Jira accountId → the local member id it resolves to, for assignee remapping.
+  const accountToMemberId = new Map<string, string>();
   let membersAdded = 0;
   for (const inc of incoming.members) {
-    const existing = mergedMembersById.get(inc.id);
-    if (existing) {
-      existing.name = inc.name;
+    const account = inc.jiraAccountId ?? inc.id;
+    // Prefer an explicit link; fall back to legacy members whose id *is* the
+    // accountId (imported before the link field existed).
+    const local = byAccount.get(account) ?? mergedMembers.find((m) => m.id === account);
+    if (local) {
+      local.name = inc.name;
+      if (!local.jiraAccountId) local.jiraAccountId = account; // backfill the link
+      accountToMemberId.set(account, local.id);
     } else {
-      mergedMembersById.set(inc.id, inc);
+      const added: TeamMember = { ...inc, jiraAccountId: account };
+      mergedMembers.push(added);
+      byAccount.set(account, added);
+      accountToMemberId.set(account, added.id);
       membersAdded += 1;
     }
   }
-  const mergedMembers = [...mergedMembersById.values()];
   const memberIds = new Set(mergedMembers.map((m) => m.id));
 
+  // Incoming work items carry the Jira accountId as their assignee; rewrite it
+  // to whatever local member that account resolved to above.
+  const remappedWorkItems = incoming.workItems.map((w) => ({
+    ...w,
+    assigneeId: w.assigneeId ? (accountToMemberId.get(w.assigneeId) ?? null) : null,
+  }));
+
   // --- Placements: preserve intent, pruning stale / completed slots.
-  const incomingItems = new Map(incoming.workItems.map((w) => [w.key, w]));
+  const incomingItems = new Map(remappedWorkItems.map((w) => [w.key, w]));
   const incomingSprintIds = new Set(incoming.sprints.map((s) => s.id));
   const keptPlacements: PlannedPlacement[] = [];
   let placementsPulledDone = 0;
@@ -121,7 +144,7 @@ export function reconcileDataset(current: DomainDataset, incoming: DomainDataset
     epics: incoming.epics,
     milestones,
     stories: incoming.stories,
-    workItems: incoming.workItems,
+    workItems: remappedWorkItems,
     dependencies: incoming.dependencies,
     sprints: incoming.sprints,
     placements: keptPlacements,

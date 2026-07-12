@@ -76,12 +76,129 @@ export interface JiraSampleResponse {
   linkTypes: Array<{ id: string; name: string; inward: string; outward: string }>;
 }
 
+/** Case-insensitive substring match, tolerant of an empty query (matches all). */
+function matches(haystack: string, q: string | undefined): boolean {
+  const needle = (q ?? '').trim().toLowerCase();
+  return needle === '' || haystack.toLowerCase().includes(needle);
+}
+
 export function registerJiraRoutes(
   app: FastifyInstance,
   db: Db,
   config: AppConfig,
   jiraClient?: JiraClient,
 ): void {
+  /** Build the client or throw a 400 the wizard can render. */
+  const client = (): JiraClient => {
+    try {
+      return buildJiraClient(config.jira, jiraClient);
+    } catch (err) {
+      throw new HttpError(400, err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  /** Resolve the project key from the query, persisted settings, or env. */
+  const resolveProject = (query?: string): string | null => {
+    const settings = readDataset(db).settings;
+    return (
+      query?.trim() ||
+      settingStr(settings, SETTING_KEYS.JIRA_PROJECT_KEY) ||
+      config.jira.projectKey ||
+      null
+    );
+  };
+
+  // --- Connection status (setup wizard "Connect" step) ---------------------
+  // Reports whether the configured credentials actually reach Jira, plus who
+  // we're authenticated as. Never returns the token.
+  app.get('/api/jira/connection', async () => {
+    let c: JiraClient;
+    try {
+      c = buildJiraClient(config.jira, jiraClient);
+    } catch (err) {
+      return {
+        connected: false,
+        baseUrl: config.jira.baseUrl,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+    try {
+      const me = await c.getCurrentUser();
+      return {
+        connected: true,
+        baseUrl: config.jira.baseUrl,
+        displayName: me.displayName,
+        email: me.emailAddress ?? config.jira.email,
+        accountId: me.accountId,
+      };
+    } catch (err) {
+      return {
+        connected: false,
+        baseUrl: config.jira.baseUrl,
+        error: `Jira request failed: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  });
+
+  // --- Board typeahead -----------------------------------------------------
+  app.get('/api/jira/boards', async (req) => {
+    const q = (req.query ?? {}) as { q?: string };
+    try {
+      const boards = await client().listBoards();
+      return {
+        boards: boards
+          .filter((b) => matches(b.name, q.q))
+          .slice(0, 25)
+          .map((b) => ({ id: b.id, name: b.name, type: b.type, projectKey: b.location?.projectKey ?? null })),
+      };
+    } catch (err) {
+      if (err instanceof HttpError) throw err;
+      throw new HttpError(502, `Jira request failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  });
+
+  // --- Epic typeahead (scoped to the selected/persisted project) -----------
+  app.get('/api/jira/epics', async (req) => {
+    const q = (req.query ?? {}) as { q?: string; project?: string };
+    const projectKey = resolveProject(q.project);
+    if (!projectKey) throw new HttpError(400, 'Select a board or set a project key first.');
+    try {
+      // The narrow fake JQL dialect has no `~`, so fetch epics and filter here;
+      // real Jira returns a bounded set per project too.
+      const res = await client().searchJql({
+        jql: `project = "${projectKey}" AND issuetype = Epic ORDER BY created DESC`,
+        fields: ['summary'],
+        maxResults: 100,
+      });
+      const epics = res.issues
+        .map((i) => ({ key: i.key, summary: (i.fields.summary as string | undefined) ?? i.key }))
+        .filter((e) => matches(e.key, q.q) || matches(e.summary, q.q))
+        .slice(0, 25);
+      return { projectKey, epics };
+    } catch (err) {
+      if (err instanceof HttpError) throw err;
+      throw new HttpError(502, `Jira request failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  });
+
+  // --- People-picker (member search + link) --------------------------------
+  app.get('/api/jira/users', async (req) => {
+    const q = (req.query ?? {}) as { q?: string };
+    try {
+      const users = await client().searchUsers((q.q ?? '').trim());
+      return {
+        users: users.slice(0, 20).map((u) => ({
+          accountId: u.accountId,
+          displayName: u.displayName,
+          email: u.emailAddress ?? null,
+        })),
+      };
+    } catch (err) {
+      if (err instanceof HttpError) throw err;
+      throw new HttpError(502, `Jira request failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  });
+
   app.get('/api/jira/sample', async (req): Promise<JiraSampleResponse> => {
     const q = (req.query ?? {}) as { project?: string; epic?: string };
     const settings = readDataset(db).settings;

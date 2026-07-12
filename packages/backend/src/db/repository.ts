@@ -96,6 +96,7 @@ const memberRow = (r: any): TeamMember => ({
   name: r.name,
   baseVelocity: r.base_velocity,
   active: r.active === 1,
+  jiraAccountId: r.jira_account_id ?? null,
 });
 
 const teamRow = (r: any): Team => ({
@@ -274,7 +275,18 @@ function assertWorkingDays(value: unknown): Weekday[] {
 // Members
 // ---------------------------------------------------------------------------
 
-export function createMember(db: Db, input: { teamId: unknown; name: unknown; baseVelocity: unknown; active?: unknown }): TeamMember {
+/** Optional Jira accountId link: a non-empty string, or null to clear it. */
+function jiraAccountIdOf(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'string') throw badRequest('jiraAccountId must be a string or null');
+  const trimmed = value.trim();
+  return trimmed === '' ? null : trimmed;
+}
+
+export function createMember(
+  db: Db,
+  input: { teamId: unknown; name: unknown; baseVelocity: unknown; active?: unknown; jiraAccountId?: unknown },
+): TeamMember {
   const teamId = assertNonEmptyString(input.teamId, 'teamId');
   requireTeam(db, teamId);
   const member: TeamMember = {
@@ -283,10 +295,11 @@ export function createMember(db: Db, input: { teamId: unknown; name: unknown; ba
     name: assertNonEmptyString(input.name, 'name'),
     baseVelocity: assertNumber(input.baseVelocity, 'baseVelocity', { min: 0 }),
     active: input.active === undefined ? true : Boolean(input.active),
+    jiraAccountId: jiraAccountIdOf(input.jiraAccountId),
   };
   db.prepare(
-    `INSERT INTO team_member (id, team_id, name, base_velocity, active)
-     VALUES (@id, @teamId, @name, @baseVelocity, @active)`,
+    `INSERT INTO team_member (id, team_id, name, base_velocity, active, jira_account_id)
+     VALUES (@id, @teamId, @name, @baseVelocity, @active, @jiraAccountId)`,
   ).run({ ...member, active: member.active ? 1 : 0 });
   return member;
 }
@@ -294,7 +307,7 @@ export function createMember(db: Db, input: { teamId: unknown; name: unknown; ba
 export function updateMember(
   db: Db,
   id: string,
-  patch: { name?: unknown; baseVelocity?: unknown; active?: unknown },
+  patch: { name?: unknown; baseVelocity?: unknown; active?: unknown; jiraAccountId?: unknown },
 ): TeamMember {
   requireMember(db, id);
   const current = memberRow(db.prepare('SELECT * FROM team_member WHERE id = ?').get(id));
@@ -304,9 +317,11 @@ export function updateMember(
     next.baseVelocity = assertNumber(patch.baseVelocity, 'baseVelocity', { min: 0 });
   }
   if (patch.active !== undefined) next.active = Boolean(patch.active);
+  if (patch.jiraAccountId !== undefined) next.jiraAccountId = jiraAccountIdOf(patch.jiraAccountId);
   db.prepare(
-    `UPDATE team_member SET name = @name, base_velocity = @baseVelocity, active = @active WHERE id = @id`,
-  ).run({ ...next, active: next.active ? 1 : 0 });
+    `UPDATE team_member SET name = @name, base_velocity = @baseVelocity, active = @active,
+       jira_account_id = @jiraAccountId WHERE id = @id`,
+  ).run({ ...next, active: next.active ? 1 : 0, jiraAccountId: next.jiraAccountId ?? null });
   return next;
 }
 

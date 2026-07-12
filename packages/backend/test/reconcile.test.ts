@@ -144,6 +144,56 @@ describe('reconcileDataset', () => {
     });
   });
 
+  it('links a synced assignee onto a hand-created member and remaps assignments', () => {
+    const current: DomainDataset = {
+      ...empty(),
+      teams: [team('T', '2026-01-27')],
+      // A member the user set up by hand (own id + velocity) and linked to a
+      // Jira account via the setup wizard.
+      members: [{ ...member('mem_local', 'Ada (me)', 15), jiraAccountId: 'acc-ada' }],
+    };
+    const incoming: DomainDataset = {
+      ...empty(),
+      teams: [team('T', '2026-01-27')],
+      // Jira reports the same person, keyed by accountId, with the import default.
+      members: [{ ...member('acc-ada', 'Ada Lovelace', 10), jiraAccountId: 'acc-ada' }],
+      epics: [{ key: 'CKT', title: 'Checkout', teamId: 'T' }],
+      stories: [{ key: 'S1', epicKey: 'CKT', title: 'Story' }],
+      workItems: [{ ...workItem('CKT-1', 'To Do'), assigneeId: 'acc-ada' }],
+    };
+    const { merged, summary } = reconcileDataset(current, incoming);
+
+    // No duplicate: the account folds into the existing local member.
+    expect(summary.membersAdded).toBe(0);
+    expect(merged.members).toHaveLength(1);
+    expect(merged.members[0]).toMatchObject({
+      id: 'mem_local',
+      name: 'Ada Lovelace', // name refreshed from Jira
+      baseVelocity: 15, // local velocity preserved
+      jiraAccountId: 'acc-ada',
+    });
+    // The work item's assignee is rewritten from the accountId to the local id.
+    expect(merged.workItems[0]!.assigneeId).toBe('mem_local');
+  });
+
+  it('backfills the link on a legacy member whose id is the accountId', () => {
+    const current: DomainDataset = {
+      ...empty(),
+      teams: [team('T', '2026-01-27')],
+      // Imported before jiraAccountId existed: id === accountId, link unset.
+      members: [member('acc-ada', 'Ada', 12)],
+    };
+    const incoming: DomainDataset = {
+      ...empty(),
+      teams: [team('T', '2026-01-27')],
+      members: [{ ...member('acc-ada', 'Ada Lovelace', 10), jiraAccountId: 'acc-ada' }],
+      epics: [{ key: 'CKT', title: 'Checkout', teamId: 'T' }],
+    };
+    const { merged, summary } = reconcileDataset(current, incoming);
+    expect(summary.membersAdded).toBe(0);
+    expect(merged.members[0]).toMatchObject({ id: 'acc-ada', baseVelocity: 12, jiraAccountId: 'acc-ada' });
+  });
+
   it('keeps a local member who has no current Jira assignments', () => {
     const current: DomainDataset = {
       ...empty(),

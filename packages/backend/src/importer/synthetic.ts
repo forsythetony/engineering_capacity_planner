@@ -191,6 +191,8 @@ export function generateSyntheticDataset(config: SyntheticConfig = {}): DomainDa
       baseVelocity: rng.int(8, 14),
       // Make one member inactive to exercise the flag; the rest take work.
       active: i !== memberCount - 1,
+      // Synthetic members are purely local (not linked to a Jira account).
+      jiraAccountId: null,
     });
   }
   const activeMembers = members.filter((m) => m.active);

@@ -59,10 +59,18 @@ describe('POST /api/sync', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().summary).toMatchObject({ epics: 1, stories: 1, workItems: 1, sprints: 1, membersAdded: 1 });
 
+    // The sync stamps its timestamp, both in the response and in settings, so
+    // the nav Sync button can compute freshness.
+    expect(typeof res.json().syncedAt).toBe('string');
+
     const data = (await app.inject({ method: 'GET', url: '/api/dataset' })).json();
     expect(data.epics[0].key).toBe('CKT-1');
     expect(data.workItems).toHaveLength(1);
     expect(data.sprints[0].id).toBe('21');
+    const lastSynced = data.settings.find((s: any) => s.key === 'last_synced_at');
+    expect(JSON.parse(lastSynced.value)).toBe(res.json().syncedAt);
+    // The assignee links onto a member and the work item points at it.
+    expect(data.workItems[0].assigneeId).toBe(data.members.find((m: any) => m.name === 'Ada').id);
   });
 
   it('preserves a Gantt placement across a re-sync', async () => {
