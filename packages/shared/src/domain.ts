@@ -63,6 +63,8 @@ export interface VelocityOverride {
   endDate: IsoDate;
   /** Multiplier applied to base velocity over the range (e.g. `0.5`). */
   multiplier: number;
+  /** Optional free-text note explaining the override (e.g. "ramping hire"). */
+  note?: string | null;
 }
 
 /** A member's paid-time-off range (inclusive). */
@@ -71,6 +73,8 @@ export interface Pto {
   memberId: string;
   startDate: IsoDate;
   endDate: IsoDate;
+  /** Optional free-text note (e.g. "wedding", "parental leave"). */
+  note?: string | null;
 }
 
 /**
@@ -83,6 +87,8 @@ export interface Oncall {
   memberId: string;
   startDate: IsoDate;
   endDate: IsoDate;
+  /** Optional free-text note (e.g. "primary rotation"). */
+  note?: string | null;
 }
 
 // ---------------------------------------------------------------------------

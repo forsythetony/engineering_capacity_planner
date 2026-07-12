@@ -58,7 +58,8 @@
       "memberId": "M4",
       "startDate": "2026-07-12",
       "endDate": "2026-07-25",
-      "multiplier": 0.5
+      "multiplier": 0.5,
+      "note": "Ramping hire"
     }
   ],
   "pto": [
@@ -66,13 +67,15 @@
       "id": "PTO1",
       "memberId": "M1",
       "startDate": "2026-07-15",
-      "endDate": "2026-07-19"
+      "endDate": "2026-07-19",
+      "note": "Summer holiday"
     },
     {
       "id": "PTO2",
       "memberId": "M2",
       "startDate": "2026-07-20",
-      "endDate": "2026-07-21"
+      "endDate": "2026-07-21",
+      "note": null
     }
   ],
   "oncall": [
@@ -80,7 +83,8 @@
       "id": "OC1",
       "memberId": "M3",
       "startDate": "2026-07-07",
-      "endDate": "2026-07-20"
+      "endDate": "2026-07-20",
+      "note": "Primary rotation"
     }
   ],
   "epics": [

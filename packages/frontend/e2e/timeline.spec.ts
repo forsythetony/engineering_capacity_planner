@@ -143,6 +143,11 @@ test.describe('Configuration tab', () => {
     const rowsBefore = await page.locator('[data-testid^="avail-row-"]').count();
     expect(rowsBefore).toBeGreaterThan(0);
 
+    // Notes from the fixture are shown and are searchable.
+    await expect(page.locator('.avail-note').first()).toBeVisible();
+    await page.getByTestId('availability-search').fill('Summer holiday');
+    await expect(page.locator('[data-testid^="avail-row-"]')).toHaveCount(1);
+
     // Searching a non-existent member filters everything out.
     await page.getByTestId('availability-search').fill('zzzznobody');
     await expect(page.locator('[data-testid^="avail-row-"]')).toHaveCount(0);

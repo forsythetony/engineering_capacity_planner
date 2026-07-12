@@ -23,16 +23,16 @@ export function writeDataset(db: Db, dataset: DomainDataset): void {
      VALUES (@id, @teamId, @name, @baseVelocity, @active)`,
   );
   const insertVelocity = db.prepare(
-    `INSERT INTO velocity_override (id, member_id, start_date, end_date, multiplier)
-     VALUES (@id, @memberId, @startDate, @endDate, @multiplier)`,
+    `INSERT INTO velocity_override (id, member_id, start_date, end_date, multiplier, note)
+     VALUES (@id, @memberId, @startDate, @endDate, @multiplier, @note)`,
   );
   const insertPto = db.prepare(
-    `INSERT INTO pto (id, member_id, start_date, end_date)
-     VALUES (@id, @memberId, @startDate, @endDate)`,
+    `INSERT INTO pto (id, member_id, start_date, end_date, note)
+     VALUES (@id, @memberId, @startDate, @endDate, @note)`,
   );
   const insertOncall = db.prepare(
-    `INSERT INTO oncall (id, member_id, start_date, end_date)
-     VALUES (@id, @memberId, @startDate, @endDate)`,
+    `INSERT INTO oncall (id, member_id, start_date, end_date, note)
+     VALUES (@id, @memberId, @startDate, @endDate, @note)`,
   );
   const insertEpic = db.prepare(
     `INSERT INTO epic (key, title, team_id) VALUES (@key, @title, @teamId)`,
@@ -64,9 +64,9 @@ export function writeDataset(db: Db, dataset: DomainDataset): void {
       insertTeam.run({ ...t, workingDays: JSON.stringify(t.workingDays) });
     }
     for (const m of data.members) insertMember.run({ ...m, active: bool(m.active) });
-    for (const v of data.velocityOverrides) insertVelocity.run(v);
-    for (const p of data.pto) insertPto.run(p);
-    for (const o of data.oncall) insertOncall.run(o);
+    for (const v of data.velocityOverrides) insertVelocity.run({ ...v, note: v.note ?? null });
+    for (const p of data.pto) insertPto.run({ ...p, note: p.note ?? null });
+    for (const o of data.oncall) insertOncall.run({ ...o, note: o.note ?? null });
     for (const e of data.epics) insertEpic.run(e);
     for (const ms of data.milestones) insertMilestone.run({ ...ms, isGating: bool(ms.isGating) });
     for (const s of data.stories) insertStory.run(s);
@@ -113,6 +113,7 @@ export function readDataset(db: Db): DomainDataset {
         startDate: r.start_date,
         endDate: r.end_date,
         multiplier: r.multiplier,
+        note: r.note ?? null,
       })),
     pto: db
       .prepare('SELECT * FROM pto')
@@ -122,6 +123,7 @@ export function readDataset(db: Db): DomainDataset {
         memberId: r.member_id,
         startDate: r.start_date,
         endDate: r.end_date,
+        note: r.note ?? null,
       })),
     oncall: db
       .prepare('SELECT * FROM oncall')
@@ -131,6 +133,7 @@ export function readDataset(db: Db): DomainDataset {
         memberId: r.member_id,
         startDate: r.start_date,
         endDate: r.end_date,
+        note: r.note ?? null,
       })),
     epics: db
       .prepare('SELECT * FROM epic')

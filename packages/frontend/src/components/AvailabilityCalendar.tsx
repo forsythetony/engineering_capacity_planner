@@ -47,7 +47,12 @@ export function AvailabilityCalendar({ entries, disabled, onDelete }: Availabili
         {entries.map((e) => {
           const left = scale.fractionOf(e.startDate);
           const width = Math.max(0, scale.fractionOf(e.endDate) - left);
-          const title = `${e.memberName} · ${KIND_LABEL[e.kind]}${e.multiplier !== undefined ? ` ×${e.multiplier}` : ''} · ${formatDate(e.startDate)} → ${formatDate(e.endDate)}`;
+          const title = `${e.memberName} · ${KIND_LABEL[e.kind]}${e.multiplier !== undefined ? ` ×${e.multiplier}` : ''} · ${formatDate(e.startDate)} → ${formatDate(e.endDate)}${e.note ? `\n${e.note}` : ''}`;
+          const bandText = e.note
+            ? e.note
+            : e.kind === 'velocity'
+              ? `×${e.multiplier}`
+              : formatDayShort(e.startDate);
           return (
             <div className="cal-row" key={`${e.kind}-${e.id}`} data-testid={`cal-row-${e.id}`}>
               <div
@@ -56,9 +61,7 @@ export function AvailabilityCalendar({ entries, disabled, onDelete }: Availabili
                 title={title}
               >
                 <MemberAvatar name={e.memberName} color={e.color} size={20} />
-                <span className="cal-band-text">
-                  {e.kind === 'velocity' ? `×${e.multiplier}` : formatDayShort(e.startDate)}
-                </span>
+                <span className="cal-band-text">{bandText}</span>
                 {!disabled && (
                   <button
                     type="button"

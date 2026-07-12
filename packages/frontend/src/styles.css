@@ -588,6 +588,15 @@ button.tab:hover:not(.active) {
   margin-bottom: 12px;
   font-family: inherit;
 }
+.avail-note {
+  color: var(--muted);
+  font-size: 12px;
+  font-style: italic;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .badge.kind-badge {
   text-transform: none;
 }

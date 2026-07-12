@@ -27,5 +27,25 @@ export function openDatabase(options: OpenDbOptions = {}): Db {
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   db.exec(SCHEMA_SQL);
+  migrate(db);
   return db;
+}
+
+/**
+ * Idempotent, additive migrations for database files created by an older
+ * schema. `CREATE TABLE IF NOT EXISTS` never alters an existing table, so a new
+ * column must be added explicitly here.
+ */
+function migrate(db: Db): void {
+  for (const table of ['pto', 'oncall', 'velocity_override']) {
+    ensureColumn(db, table, 'note', 'TEXT');
+  }
+}
+
+/** Add `column` to `table` if it's not already present. */
+function ensureColumn(db: Db, table: string, column: string, type: string): void {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!cols.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+  }
 }

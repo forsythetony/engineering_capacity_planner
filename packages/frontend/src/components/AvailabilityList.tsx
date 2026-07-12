@@ -17,7 +17,10 @@ export function AvailabilityList({ entries, disabled, onDelete }: AvailabilityLi
     const q = query.trim().toLowerCase();
     if (!q) return entries;
     return entries.filter(
-      (e) => e.memberName.toLowerCase().includes(q) || KIND_LABEL[e.kind].toLowerCase().includes(q),
+      (e) =>
+        e.memberName.toLowerCase().includes(q) ||
+        KIND_LABEL[e.kind].toLowerCase().includes(q) ||
+        (e.note ?? '').toLowerCase().includes(q),
     );
   }, [entries, query]);
 
@@ -45,6 +48,7 @@ export function AvailabilityList({ entries, disabled, onDelete }: AvailabilityLi
             <span className="unit">
               {formatDate(e.startDate)} → {formatDate(e.endDate)}
             </span>
+            {e.note && <span className="avail-note" title={e.note}>“{e.note}”</span>}
             <button
               type="button"
               className="link-btn danger"

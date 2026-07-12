@@ -66,6 +66,14 @@ function assertDateOrder(start: IsoDate, end: IsoDate): void {
   if (end < start) throw badRequest('endDate must be on or after startDate');
 }
 
+/** Optional free-text note: trimmed to a string, or null when blank/absent. */
+function noteOf(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'string') throw badRequest('note must be a string');
+  const trimmed = value.trim();
+  return trimmed === '' ? null : trimmed;
+}
+
 function newId(prefix: string): string {
   return `${prefix}_${randomUUID().slice(0, 8)}`;
 }
@@ -96,6 +104,7 @@ const ptoRow = (r: any): Pto => ({
   memberId: r.member_id,
   startDate: r.start_date,
   endDate: r.end_date,
+  note: r.note ?? null,
 });
 
 const oncallRow = (r: any): Oncall => ({
@@ -103,6 +112,7 @@ const oncallRow = (r: any): Oncall => ({
   memberId: r.member_id,
   startDate: r.start_date,
   endDate: r.end_date,
+  note: r.note ?? null,
 });
 
 const velocityRow = (r: any): VelocityOverride => ({
@@ -111,6 +121,7 @@ const velocityRow = (r: any): VelocityOverride => ({
   startDate: r.start_date,
   endDate: r.end_date,
   multiplier: r.multiplier,
+  note: r.note ?? null,
 });
 
 const milestoneRow = (r: any): EpicMilestone => ({
@@ -297,15 +308,19 @@ export function deleteMember(db: Db, id: string): void {
 // Member date-range modifiers: PTO, on-call, velocity overrides
 // ---------------------------------------------------------------------------
 
-export function createPto(db: Db, input: { memberId: unknown; startDate: unknown; endDate: unknown }): Pto {
+export function createPto(
+  db: Db,
+  input: { memberId: unknown; startDate: unknown; endDate: unknown; note?: unknown },
+): Pto {
   const memberId = assertNonEmptyString(input.memberId, 'memberId');
   requireMember(db, memberId);
   const startDate = assertIsoDate(input.startDate, 'startDate');
   const endDate = assertIsoDate(input.endDate, 'endDate');
   assertDateOrder(startDate, endDate);
-  const pto: Pto = { id: newId('pto'), memberId, startDate, endDate };
+  const pto: Pto = { id: newId('pto'), memberId, startDate, endDate, note: noteOf(input.note) };
   db.prepare(
-    `INSERT INTO pto (id, member_id, start_date, end_date) VALUES (@id, @memberId, @startDate, @endDate)`,
+    `INSERT INTO pto (id, member_id, start_date, end_date, note)
+     VALUES (@id, @memberId, @startDate, @endDate, @note)`,
   ).run(pto);
   return pto;
 }
@@ -316,15 +331,19 @@ export function deletePto(db: Db, id: string): void {
   }
 }
 
-export function createOncall(db: Db, input: { memberId: unknown; startDate: unknown; endDate: unknown }): Oncall {
+export function createOncall(
+  db: Db,
+  input: { memberId: unknown; startDate: unknown; endDate: unknown; note?: unknown },
+): Oncall {
   const memberId = assertNonEmptyString(input.memberId, 'memberId');
   requireMember(db, memberId);
   const startDate = assertIsoDate(input.startDate, 'startDate');
   const endDate = assertIsoDate(input.endDate, 'endDate');
   assertDateOrder(startDate, endDate);
-  const oncall: Oncall = { id: newId('oc'), memberId, startDate, endDate };
+  const oncall: Oncall = { id: newId('oc'), memberId, startDate, endDate, note: noteOf(input.note) };
   db.prepare(
-    `INSERT INTO oncall (id, member_id, start_date, end_date) VALUES (@id, @memberId, @startDate, @endDate)`,
+    `INSERT INTO oncall (id, member_id, start_date, end_date, note)
+     VALUES (@id, @memberId, @startDate, @endDate, @note)`,
   ).run(oncall);
   return oncall;
 }
@@ -337,7 +356,7 @@ export function deleteOncall(db: Db, id: string): void {
 
 export function createVelocityOverride(
   db: Db,
-  input: { memberId: unknown; startDate: unknown; endDate: unknown; multiplier: unknown },
+  input: { memberId: unknown; startDate: unknown; endDate: unknown; multiplier: unknown; note?: unknown },
 ): VelocityOverride {
   const memberId = assertNonEmptyString(input.memberId, 'memberId');
   requireMember(db, memberId);
@@ -350,10 +369,11 @@ export function createVelocityOverride(
     startDate,
     endDate,
     multiplier: assertNumber(input.multiplier, 'multiplier', { min: 0 }),
+    note: noteOf(input.note),
   };
   db.prepare(
-    `INSERT INTO velocity_override (id, member_id, start_date, end_date, multiplier)
-     VALUES (@id, @memberId, @startDate, @endDate, @multiplier)`,
+    `INSERT INTO velocity_override (id, member_id, start_date, end_date, multiplier, note)
+     VALUES (@id, @memberId, @startDate, @endDate, @multiplier, @note)`,
   ).run(vo);
   return vo;
 }

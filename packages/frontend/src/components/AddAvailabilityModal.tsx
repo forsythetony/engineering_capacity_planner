@@ -8,6 +8,7 @@ export interface NewAvailability {
   startDate: string;
   endDate: string;
   multiplier?: number;
+  note?: string | null;
 }
 
 interface AddAvailabilityModalProps {
@@ -27,6 +28,7 @@ export function AddAvailabilityModal({ members, onClose, onAdd }: AddAvailabilit
   const [start, setStart] = useState(todayIso());
   const [end, setEnd] = useState(todayIso());
   const [multiplier, setMultiplier] = useState('0.5');
+  const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,6 +49,7 @@ export function AddAvailabilityModal({ members, onClose, onAdd }: AddAvailabilit
         memberId,
         startDate: start,
         endDate: end,
+        note: note.trim() || null,
         ...(kind === 'velocity' ? { multiplier: Number(multiplier) } : {}),
       });
       onClose();
@@ -105,6 +108,11 @@ export function AddAvailabilityModal({ members, onClose, onAdd }: AddAvailabilit
                 onChange={(e) => setMultiplier(e.target.value)} />
             </label>
           )}
+          <label className="control">
+            <span>Note (optional)</span>
+            <input type="text" value={note} data-testid="modal-note" placeholder="e.g. parental leave"
+              maxLength={200} onChange={(e) => setNote(e.target.value)} />
+          </label>
         </div>
 
         {error && <div className="config-error modal-error" data-testid="modal-error">⚠ {error}</div>}

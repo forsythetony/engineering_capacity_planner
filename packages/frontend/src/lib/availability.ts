@@ -21,6 +21,8 @@ export interface AvailabilityEntry {
   endDate: IsoDate;
   /** Present for velocity overrides only. */
   multiplier?: number;
+  /** Optional free-text note. */
+  note?: string | null;
 }
 
 /**
@@ -47,6 +49,7 @@ export function buildAvailabilityEntries(
       color: colorFor(colors, p.memberId),
       startDate: p.startDate,
       endDate: p.endDate,
+      note: p.note ?? null,
     });
   }
   for (const o of dataset.oncall) {
@@ -59,6 +62,7 @@ export function buildAvailabilityEntries(
       color: colorFor(colors, o.memberId),
       startDate: o.startDate,
       endDate: o.endDate,
+      note: o.note ?? null,
     });
   }
   for (const v of dataset.velocityOverrides) {
@@ -72,6 +76,7 @@ export function buildAvailabilityEntries(
       startDate: v.startDate,
       endDate: v.endDate,
       multiplier: v.multiplier,
+      note: v.note ?? null,
     });
   }
 

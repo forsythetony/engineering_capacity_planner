@@ -32,21 +32,24 @@ CREATE TABLE IF NOT EXISTS velocity_override (
   member_id  TEXT NOT NULL REFERENCES team_member(id) ON DELETE CASCADE,
   start_date TEXT NOT NULL,
   end_date   TEXT NOT NULL,
-  multiplier REAL NOT NULL
+  multiplier REAL NOT NULL,
+  note       TEXT
 );
 
 CREATE TABLE IF NOT EXISTS pto (
   id         TEXT PRIMARY KEY,
   member_id  TEXT NOT NULL REFERENCES team_member(id) ON DELETE CASCADE,
   start_date TEXT NOT NULL,
-  end_date   TEXT NOT NULL
+  end_date   TEXT NOT NULL,
+  note       TEXT
 );
 
 CREATE TABLE IF NOT EXISTS oncall (
   id         TEXT PRIMARY KEY,
   member_id  TEXT NOT NULL REFERENCES team_member(id) ON DELETE CASCADE,
   start_date TEXT NOT NULL,
-  end_date   TEXT NOT NULL
+  end_date   TEXT NOT NULL,
+  note       TEXT
 );
 
 CREATE TABLE IF NOT EXISTS epic (

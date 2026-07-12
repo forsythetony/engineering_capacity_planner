@@ -114,6 +114,27 @@ describe('date-range modifiers', () => {
     expectHttp(() => repo.createPto(db, { memberId: 'ghost', startDate: '2026-08-01', endDate: '2026-08-05' }), 404);
   });
 
+  it('stores an optional note and normalises blank notes to null', () => {
+    const withNote = repo.createPto(db, {
+      memberId: 'M2',
+      startDate: '2026-08-01',
+      endDate: '2026-08-05',
+      note: '  parental leave  ',
+    });
+    expect(withNote.note).toBe('parental leave'); // trimmed
+    const blank = repo.createOncall(db, { memberId: 'M2', startDate: '2026-08-01', endDate: '2026-08-05', note: '   ' });
+    expect(blank.note).toBeNull();
+    const absent = repo.createVelocityOverride(db, {
+      memberId: 'M2',
+      startDate: '2026-08-01',
+      endDate: '2026-08-05',
+      multiplier: 0.5,
+    });
+    expect(absent.note).toBeNull();
+    // Persisted round-trip.
+    expect(readDataset(db).pto.find((p) => p.id === withNote.id)!.note).toBe('parental leave');
+  });
+
   it('creates on-call and velocity overrides', () => {
     const oc = repo.createOncall(db, { memberId: 'M3', startDate: '2026-08-01', endDate: '2026-08-14' });
     expect(oc.id).toMatch(/^oc_/);

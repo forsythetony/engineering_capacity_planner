@@ -51,13 +51,21 @@ export const deleteMember = (id: string): Promise<void> =>
   request('DELETE', `/api/members/${encodeURIComponent(id)}`);
 
 // --- Date-range modifiers --------------------------------------------------
-export const createPto = (input: { memberId: string; startDate: string; endDate: string }): Promise<Pto> =>
-  request('POST', '/api/pto', input);
+export const createPto = (input: {
+  memberId: string;
+  startDate: string;
+  endDate: string;
+  note?: string | null;
+}): Promise<Pto> => request('POST', '/api/pto', input);
 export const deletePto = (id: string): Promise<void> =>
   request('DELETE', `/api/pto/${encodeURIComponent(id)}`);
 
-export const createOncall = (input: { memberId: string; startDate: string; endDate: string }): Promise<Oncall> =>
-  request('POST', '/api/oncall', input);
+export const createOncall = (input: {
+  memberId: string;
+  startDate: string;
+  endDate: string;
+  note?: string | null;
+}): Promise<Oncall> => request('POST', '/api/oncall', input);
 export const deleteOncall = (id: string): Promise<void> =>
   request('DELETE', `/api/oncall/${encodeURIComponent(id)}`);
 
@@ -66,6 +74,7 @@ export const createVelocityOverride = (input: {
   startDate: string;
   endDate: string;
   multiplier: number;
+  note?: string | null;
 }): Promise<VelocityOverride> => request('POST', '/api/velocity-overrides', input);
 export const deleteVelocityOverride = (id: string): Promise<void> =>
   request('DELETE', `/api/velocity-overrides/${encodeURIComponent(id)}`);
