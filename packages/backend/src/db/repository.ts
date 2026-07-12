@@ -173,6 +173,10 @@ const EDITABLE_SETTINGS: Record<string, (value: unknown, key: string) => unknown
   [SETTING_KEYS.JIRA_STORY_POINTS_FIELD]: nullableString,
   [SETTING_KEYS.JIRA_PROJECT_KEY]: nullableString,
   [SETTING_KEYS.JIRA_BLOCKS_LINK_TYPE]: nullableString,
+  [SETTING_KEYS.JIRA_EPIC_KEY]: nullableString,
+  [SETTING_KEYS.JIRA_BOARD_ID]: nullableString,
+  [SETTING_KEYS.JIRA_SPRINT_FIELD]: nullableString,
+  [SETTING_KEYS.JIRA_LABELS_FIELD]: nullableString,
 };
 
 function nullableString(value: unknown, field: string): string | null {

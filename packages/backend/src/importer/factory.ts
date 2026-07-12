@@ -1,5 +1,6 @@
 import type { Importer, Setting } from '@ecp/shared';
 import type { AppConfig, JiraConfig } from '../config.js';
+import type { JiraClient } from '../jira/client.js';
 import { HttpJiraClient } from '../jira/http-client.js';
 import { resolveMapping } from '../jira/mapping.js';
 import { JiraImporter } from './jira.js';
@@ -20,24 +21,30 @@ const REQUIRED_CONNECTION: Array<{ key: keyof JiraConfig; env: string }> = [
  * Connection secrets come from the environment ({@link JiraConfig}); the field
  * *mapping* comes from persisted {@link Setting}s (the Configuration tab's live
  * field picker), falling back to env for a fresh, unconfigured database.
+ *
+ * `clientOverride` injects a {@link JiraClient} (e.g. the in-memory fake) for
+ * tests and the round-trip harness, bypassing the HTTP client and its
+ * connection-secret requirement.
  */
-export function createImporter(config: AppConfig, settings: Setting[] = []): Importer {
+export function createImporter(
+  config: AppConfig,
+  settings: Setting[] = [],
+  clientOverride?: JiraClient,
+): Importer {
   switch (config.dataSource) {
     case 'synthetic':
       return new SyntheticImporter({ seed: config.syntheticSeed });
     case 'jira': {
-      const missing = REQUIRED_CONNECTION.filter(({ key }) => config.jira[key] == null).map(
-        ({ env }) => env,
-      );
-      if (missing.length > 0) {
-        throw new Error(`Jira connection incomplete — set: ${missing.join(', ')}`);
-      }
-      const client = new HttpJiraClient({
-        baseUrl: config.jira.baseUrl!,
-        email: config.jira.email!,
-        apiToken: config.jira.apiToken!,
-      });
+      const client = clientOverride ?? buildHttpClient(config.jira);
       return new JiraImporter(client, resolveMapping(settings, config.jira));
     }
   }
+}
+
+function buildHttpClient(jira: JiraConfig): HttpJiraClient {
+  const missing = REQUIRED_CONNECTION.filter(({ key }) => jira[key] == null).map(({ env }) => env);
+  if (missing.length > 0) {
+    throw new Error(`Jira connection incomplete — set: ${missing.join(', ')}`);
+  }
+  return new HttpJiraClient({ baseUrl: jira.baseUrl!, email: jira.email!, apiToken: jira.apiToken! });
 }

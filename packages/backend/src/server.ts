@@ -4,8 +4,16 @@ import { openDatabase } from './db/database.js';
 import { readDataset, writeDataset } from './db/persist.js';
 import { createImporter } from './importer/factory.js';
 import { HttpError } from './http-error.js';
+import type { JiraClient } from './jira/client.js';
 import { registerConfigRoutes } from './routes/config.js';
 import { registerPlanningRoutes } from './routes/planning.js';
+import { registerSyncRoutes } from './routes/sync.js';
+
+/** Injectable dependencies (used by tests / the round-trip harness). */
+export interface BuildServerDeps {
+  /** Override the Jira client (e.g. the in-memory fake) instead of HTTP. */
+  jiraClient?: JiraClient;
+}
 
 /**
  * Minimal localhost API serving the domain data to the frontend.
@@ -15,7 +23,7 @@ import { registerPlanningRoutes } from './routes/planning.js';
  * startup and `seedIfEmpty` is set, it's populated from the configured importer
  * (synthetic today, Jira in Phase 7), so `npm run dev` works with zero setup.
  */
-export async function buildServer(overrides: Partial<AppConfig> = {}) {
+export async function buildServer(overrides: Partial<AppConfig> = {}, deps: BuildServerDeps = {}) {
   const config: AppConfig = { ...loadConfig(), ...overrides };
 
   const app = Fastify({ logger: true });
@@ -24,7 +32,7 @@ export async function buildServer(overrides: Partial<AppConfig> = {}) {
   if (config.seedIfEmpty) {
     const { n } = db.prepare('SELECT COUNT(*) AS n FROM epic').get() as { n: number };
     if (n === 0) {
-      const importer = createImporter(config);
+      const importer = createImporter(config, [], deps.jiraClient);
       app.log.info(`Empty database — importing from "${importer.name}" source`);
       writeDataset(db, await importer.fetch());
     }
@@ -69,6 +77,8 @@ export async function buildServer(overrides: Partial<AppConfig> = {}) {
   registerConfigRoutes(app, db);
   // Gantt Planner placement endpoints (project plan §6a).
   registerPlanningRoutes(app, db);
+  // Jira sync: re-import + reconcile (project plan §7).
+  registerSyncRoutes(app, db, config, deps.jiraClient);
 
   app.addHook('onClose', async () => {
     db.close();
