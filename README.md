@@ -106,16 +106,23 @@ preinstalled Chromium: `PW_CHROMIUM_PATH=/path/to/chrome npm run e2e`.
 
 ## Seeding & Inspecting the Database
 
-`npm run dev` auto-populates an empty DB. To generate and inspect a database
-directly (Phase 1 is verifiable via DB inspection):
+`npm run dev` auto-populates an empty DB. To generate and inspect the **local**
+database directly (Phase 1 is verifiable via DB inspection):
 
 ```bash
-npm run seed                          # → ./data/ecp.db
-npm run seed -- --seed 7 --items 60   # different seed / size
-npm run export:fixture                # regenerate the frontend's bundled fallback dataset
+npm run seed:local             # → ./data/ecp.db
+npm run export:fixture         # regenerate the frontend's bundled fallback dataset
+
+# Parameterized runs (different seed / size / path) pass flags to the script,
+# so invoke it from the backend workspace where `--` forwards cleanly:
+npm run seed:local -w @ecp/backend -- --seed 7 --items 60
 ```
 
-Example `npm run seed` output:
+> `seed:local` seeds this machine's SQLite file. Its Phase 7 counterpart,
+> `seed:jira`, pushes the same synthetic dataset into a real Jira instance so the
+> sync round-trip can be exercised end-to-end.
+
+Example `npm run seed:local` output:
 
 ```
 Seeded synthetic dataset → ./data/ecp.db (seed=1)
@@ -167,7 +174,7 @@ docs/         project plan
 - The synthetic generator is fully deterministic per seed, so tests assert on
   exact output.
 - The SQLite file is the shareable unit and is gitignored — regenerate it with
-  `npm run seed` (or let the server auto-import on startup).
+  `npm run seed:local` (or let the server auto-import on startup).
 
 # Project Planning
 

@@ -1,9 +1,11 @@
 /**
- * Seed a SQLite database with a synthetic epic and print an inspection summary.
+ * Seed the **local** SQLite database with a synthetic epic and print an
+ * inspection summary. This is the local counterpart to `seed:jira` (Phase 7),
+ * which pushes the same synthetic dataset into a real Jira instance.
  *
  * Usage:
- *   npm run seed                      # writes ./data/ecp.db
- *   npm run seed -- --db /tmp/x.db --seed 7 --items 60
+ *   npm run seed:local                      # writes ./data/ecp.db
+ *   npm run seed:local -- --db /tmp/x.db --seed 7 --items 60
  *
  * Phase 1 is "verifiable via DB inspection", so this script doubles as the
  * verification tool: it reads the data back out of SQLite and reports counts,
