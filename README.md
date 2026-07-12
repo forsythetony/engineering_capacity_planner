@@ -136,6 +136,36 @@ npm run e2e              # Playwright e2e (drives the timeline in Chromium)
 The backend seeds an empty database with synthetic data on startup, so
 `npm run dev` needs no separate seed step.
 
+## Configuration
+
+Nothing environment-specific is hardcoded. All config comes from environment
+variables (one `.env` at the repo root serves both the backend and the Vite
+frontend). Copy the template and edit:
+
+```bash
+cp .env.example .env
+```
+
+An empty `.env` runs the app on synthetic data. Key knobs:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `ECP_HOST` / `ECP_PORT` | `127.0.0.1` / `3001` | API bind address |
+| `ECP_DB_PATH` | `./data/ecp.db` | SQLite file (the shareable unit) |
+| `ECP_CORS_ORIGIN` | `*` | `Access-Control-Allow-Origin` for the API |
+| `ECP_DATA_SOURCE` | `synthetic` | `synthetic` or `jira` |
+| `ECP_SEED_IF_EMPTY` | `true` | Import from the source if the DB is empty on startup |
+| `VITE_PORT` / `VITE_API_TARGET` | `5173` / `http://127.0.0.1:3001` | Dev server + proxy target |
+| `JIRA_*` | — | Jira connection + mapping (used when `ECP_DATA_SOURCE=jira`) |
+
+**Pointing at Jira (Phase 7):** set `ECP_DATA_SOURCE=jira` and fill the `JIRA_*`
+values (base URL, email, API token, project key, story-points field, "blocks"
+link type). The importer is selected by config alone — no code change — and
+fails fast with the exact missing variables until Phase 7 lands its `fetch()`.
+
+**Security:** the SQLite database is the shareable unit, so **secrets never
+touch it**. The Jira API token lives only in the environment / `.env`.
+
 ## Getting started
 
 ```bash

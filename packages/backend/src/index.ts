@@ -7,3 +7,13 @@ export {
   type SyntheticConfig,
 } from './importer/synthetic.js';
 export { Rng } from './importer/rng.js';
+export { JiraImporter } from './importer/jira.js';
+export { createImporter } from './importer/factory.js';
+export {
+  loadConfig,
+  loadDotenv,
+  type AppConfig,
+  type JiraConfig,
+  type DataSource,
+} from './config.js';
+export { buildServer } from './server.js';
