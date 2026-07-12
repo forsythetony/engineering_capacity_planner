@@ -44,6 +44,12 @@ export interface AppConfig {
   /** Deterministic seed for the synthetic importer. */
   syntheticSeed: number;
   jira: JiraConfig;
+  /**
+   * Demo mode: back the Jira source with an in-memory fake pre-seeded from the
+   * synthetic dataset (no real credentials). Lets you exercise the field mapper
+   * and Sync in the real app offline. Implies `dataSource: 'jira'`.
+   */
+  jiraFake: boolean;
 }
 
 type Env = Record<string, string | undefined>;
@@ -87,6 +93,7 @@ export function loadConfig(env: Env = process.env): AppConfig {
     dataSource: dataSource(env.ECP_DATA_SOURCE),
     seedIfEmpty: bool(env.ECP_SEED_IF_EMPTY, true),
     syntheticSeed: int(env.ECP_SYNTHETIC_SEED, 1),
+    jiraFake: bool(env.ECP_JIRA_FAKE, false),
     jira: {
       baseUrl: str(env.JIRA_BASE_URL),
       email: str(env.JIRA_EMAIL),

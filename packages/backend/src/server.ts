@@ -4,8 +4,18 @@ import { openDatabase } from './db/database.js';
 import { readDataset, writeDataset } from './db/persist.js';
 import { createImporter } from './importer/factory.js';
 import { HttpError } from './http-error.js';
+import type { JiraClient } from './jira/client.js';
+import { createDemoJiraClient, DEMO_MAPPING } from './jira/demo.js';
 import { registerConfigRoutes } from './routes/config.js';
+import { registerJiraRoutes } from './routes/jira.js';
 import { registerPlanningRoutes } from './routes/planning.js';
+import { registerSyncRoutes } from './routes/sync.js';
+
+/** Injectable dependencies (used by tests / the round-trip harness). */
+export interface BuildServerDeps {
+  /** Override the Jira client (e.g. the in-memory fake) instead of HTTP. */
+  jiraClient?: JiraClient;
+}
 
 /**
  * Minimal localhost API serving the domain data to the frontend.
@@ -15,16 +25,34 @@ import { registerPlanningRoutes } from './routes/planning.js';
  * startup and `seedIfEmpty` is set, it's populated from the configured importer
  * (synthetic today, Jira in Phase 7), so `npm run dev` works with zero setup.
  */
-export async function buildServer(overrides: Partial<AppConfig> = {}) {
-  const config: AppConfig = { ...loadConfig(), ...overrides };
+export async function buildServer(overrides: Partial<AppConfig> = {}, deps: BuildServerDeps = {}) {
+  let config: AppConfig = { ...loadConfig(), ...overrides };
 
   const app = Fastify({ logger: true });
   const db = openDatabase({ path: config.dbPath });
 
+  // Demo mode: stand up a pre-seeded fake Jira and default its mapping, so the
+  // field mapper + Sync work in the real app with no credentials.
+  let jiraClient = deps.jiraClient;
+  if (config.jiraFake && !jiraClient) {
+    jiraClient = await createDemoJiraClient(config.syntheticSeed);
+    config = {
+      ...config,
+      dataSource: 'jira',
+      jira: {
+        ...config.jira,
+        projectKey: config.jira.projectKey ?? DEMO_MAPPING.projectKey,
+        storyPointsField: config.jira.storyPointsField ?? DEMO_MAPPING.storyPointsField,
+        blocksLinkType: config.jira.blocksLinkType ?? DEMO_MAPPING.blocksLinkType,
+      },
+    };
+    app.log.info('ECP_JIRA_FAKE — using an in-memory demo Jira board');
+  }
+
   if (config.seedIfEmpty) {
     const { n } = db.prepare('SELECT COUNT(*) AS n FROM epic').get() as { n: number };
     if (n === 0) {
-      const importer = createImporter(config);
+      const importer = createImporter(config, [], jiraClient);
       app.log.info(`Empty database — importing from "${importer.name}" source`);
       writeDataset(db, await importer.fetch());
     }
@@ -69,6 +97,10 @@ export async function buildServer(overrides: Partial<AppConfig> = {}) {
   registerConfigRoutes(app, db);
   // Gantt Planner placement endpoints (project plan §6a).
   registerPlanningRoutes(app, db);
+  // Jira sync: re-import + reconcile (project plan §7).
+  registerSyncRoutes(app, db, config, jiraClient);
+  // Jira introspection for the live field mapper (project plan §7).
+  registerJiraRoutes(app, db, config, jiraClient);
 
   app.addHook('onClose', async () => {
     db.close();

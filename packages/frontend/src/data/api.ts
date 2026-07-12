@@ -34,9 +34,35 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return data as T;
 }
 
-// --- Settings knobs (+ Jira mapping stubs) ---------------------------------
+// --- Settings knobs (+ Jira mapping) ---------------------------------------
 export const patchSettings = (patch: Record<string, unknown>): Promise<unknown> =>
   request('PATCH', '/api/settings', patch);
+
+// --- Jira sync + live field mapping (project plan §7) ----------------------
+export interface JiraSampleResponse {
+  projectKey: string;
+  sampleKey: string | null;
+  fields: Record<string, unknown> | null;
+  catalog: Array<{ id: string; name: string; custom: boolean; type: string | null }>;
+  linkTypes: Array<{ id: string; name: string; inward: string; outward: string }>;
+}
+
+export interface SyncResponse {
+  source: string;
+  summary: Record<string, number>;
+}
+
+/** Fetch the field catalog + a sample issue so the user can map fields live. */
+export const getJiraSample = (params: { project?: string; epic?: string } = {}): Promise<JiraSampleResponse> => {
+  const q = new URLSearchParams();
+  if (params.project) q.set('project', params.project);
+  if (params.epic) q.set('epic', params.epic);
+  const qs = q.toString();
+  return request('GET', `/api/jira/sample${qs ? `?${qs}` : ''}`);
+};
+
+/** Re-import from Jira and reconcile onto local state. */
+export const syncNow = (): Promise<SyncResponse> => request('POST', '/api/sync');
 
 // --- Team cadence ----------------------------------------------------------
 export const updateTeam = (id: string, patch: Partial<Omit<Team, 'id'>>): Promise<Team> =>

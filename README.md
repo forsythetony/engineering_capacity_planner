@@ -106,16 +106,23 @@ preinstalled Chromium: `PW_CHROMIUM_PATH=/path/to/chrome npm run e2e`.
 
 ## Seeding & Inspecting the Database
 
-`npm run dev` auto-populates an empty DB. To generate and inspect a database
-directly (Phase 1 is verifiable via DB inspection):
+`npm run dev` auto-populates an empty DB. To generate and inspect the **local**
+database directly (Phase 1 is verifiable via DB inspection):
 
 ```bash
-npm run seed                          # → ./data/ecp.db
-npm run seed -- --seed 7 --items 60   # different seed / size
-npm run export:fixture                # regenerate the frontend's bundled fallback dataset
+npm run seed:local             # → ./data/ecp.db
+npm run export:fixture         # regenerate the frontend's bundled fallback dataset
+
+# Parameterized runs (different seed / size / path) pass flags to the script,
+# so invoke it from the backend workspace where `--` forwards cleanly:
+npm run seed:local -w @ecp/backend -- --seed 7 --items 60
 ```
 
-Example `npm run seed` output:
+> `seed:local` seeds this machine's SQLite file. Its Phase 7 counterpart,
+> `seed:jira`, pushes the same synthetic dataset into a real Jira instance so the
+> sync round-trip can be exercised end-to-end.
+
+Example `npm run seed:local` output:
 
 ```
 Seeded synthetic dataset → ./data/ecp.db (seed=1)
@@ -133,6 +140,40 @@ Seeded synthetic dataset → ./data/ecp.db (seed=1)
     CKT-1    blocks 10  — Fix analytics events
     ...
 ```
+
+## Jira Synchronization (Phase 7)
+
+The app can pull its data from a real Jira project instead of the synthetic
+generator. **Jira owns facts** (epics, stories, work items, points, status,
+labels, dependencies, sprints); **the local database owns intent** (PTO,
+on-call, velocity, milestones, knobs, and the Gantt placements). A **Sync**
+re-imports the facts and reconciles them onto local state without losing your
+plan — completed tickets are auto-pulled from their future week, freeing
+capacity.
+
+**Credentials** (`JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`) live in the
+environment only, never in the database. **Field mapping** (which custom field
+is story points, the sprint field, the "blocks" link type, …) is set in the app
+— Configuration → Jira mapping resolves it from a live sample of your board —
+and persisted to the database.
+
+Prove the loop end-to-end against a real instance:
+
+```bash
+# 1. Push the synthetic dataset INTO your Jira (creates an epic + its subtree):
+npm run seed:jira -w @ecp/backend -- --no-assignee     # prints the new epic key
+# 2. Point the app at it and pull it back:
+#    set ECP_DATA_SOURCE=jira + the JIRA_* mapping in .env, then:
+npm run dev                                             # hit Sync in the UI
+
+# No Jira handy? Run the whole push against an in-memory fake:
+npm run seed:jira -w @ecp/backend -- --fake
+```
+
+The client targets the current Jira Cloud REST v3 + Agile APIs (cursor-paginated
+`search/jql`, the standard `parent` field, workflow transitions for status). An
+in-memory `FakeJiraClient` mirrors those exact shapes, so the full
+push → sync → reconcile round-trip is covered headlessly in the test suite.
 
 ## Project Layout
 
@@ -167,7 +208,7 @@ docs/         project plan
 - The synthetic generator is fully deterministic per seed, so tests assert on
   exact output.
 - The SQLite file is the shareable unit and is gitignored — regenerate it with
-  `npm run seed` (or let the server auto-import on startup).
+  `npm run seed:local` (or let the server auto-import on startup).
 
 # Project Planning
 

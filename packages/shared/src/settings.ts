@@ -23,7 +23,8 @@ export const SETTING_KEYS = {
    * the UI uses the actual current date.
    */
   PLANNING_TODAY: 'planning_today',
-  // --- Jira mapping stubs: designed in early, inert until Phase 7. ---
+  // --- Jira field mapping (Phase 7). Resolved from a live sample in the
+  //     Configuration tab; the tool works with whatever fields a team has. ---
   /** Jira flavor: `"cloud"` or `"server"`. */
   JIRA_FLAVOR: 'jira_flavor',
   /** Custom field id holding story points, e.g. `"customfield_10016"`. */
@@ -32,6 +33,14 @@ export const SETTING_KEYS = {
   JIRA_PROJECT_KEY: 'jira_project_key',
   /** Issue-link type that represents "blocks". */
   JIRA_BLOCKS_LINK_TYPE: 'jira_blocks_link_type',
+  /** The specific epic key to import work from (e.g. `"CKT"`). */
+  JIRA_EPIC_KEY: 'jira_epic_key',
+  /** Agile board id used to read sprints; blank = auto-discover the project's board. */
+  JIRA_BOARD_ID: 'jira_board_id',
+  /** Custom field id carrying the sprint, e.g. `"customfield_10020"`. */
+  JIRA_SPRINT_FIELD: 'jira_sprint_field',
+  /** Field id carrying the labels that feed Gantt lanes (default the native `labels`). */
+  JIRA_LABELS_FIELD: 'jira_labels_field',
 } as const;
 
 /** Default cadence values (project plan §4, decision #1). */
@@ -72,5 +81,9 @@ export function defaultGlobalSettings(): Setting[] {
     global(SETTING_KEYS.JIRA_STORY_POINTS_FIELD, null),
     global(SETTING_KEYS.JIRA_PROJECT_KEY, null),
     global(SETTING_KEYS.JIRA_BLOCKS_LINK_TYPE, null),
+    global(SETTING_KEYS.JIRA_EPIC_KEY, null),
+    global(SETTING_KEYS.JIRA_BOARD_ID, null),
+    global(SETTING_KEYS.JIRA_SPRINT_FIELD, null),
+    global(SETTING_KEYS.JIRA_LABELS_FIELD, null),
   ];
 }

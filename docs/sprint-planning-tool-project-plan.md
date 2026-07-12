@@ -158,7 +158,7 @@ Net effect: we get an easy, fully local test loop today, and a clean seam to plu
 - **Phase 7 — Jira synchronization.** *(see §7.)* Implement the importer against real Jira and go bidirectional: seed a Jira instance with test data, sync it back, and reconcile against the local intent layer. Field mapping is **resilient and configurable** — the tool works with whatever fields a team already has (story-points, labels, sprint, "blocks" link type) rather than requiring an exact shape. Jira owns facts; the Gantt's placements own intent; a completed ticket is auto-pulled from its future slot, freeing that week's capacity.
 - **Phase 8 — Export/import, polish & packaging.** Shareable DB/export files, e2e hardening, optional Tauri/Electron wrapper.
 
-**Status:** Phases 1–5 are complete (synthetic data → engine → timeline → dependency graph → configuration). The next milestone is **Phase 6 (Gantt Planner)**, then **Phase 7 (Jira synchronization)**.
+**Status:** Phases 1–7 are complete (synthetic data → engine → timeline → dependency graph → configuration → Gantt Planner → Jira synchronization). Phase 7 landed the round-trip against the current Jira Cloud REST v3 + Agile APIs, behind a `JiraClient` seam with an in-memory `FakeJiraClient` that mirrors the wire shapes so the whole push → sync → reconcile loop runs headless. Facts (epics/stories/work items/deps/sprints) come from Jira; intent (PTO, on-call, velocity, milestones, knobs, Gantt placements) stays local and survives syncs, with completed tickets auto-pulled from their slots. Field mapping is resolved live from a sample issue in the Configuration tab and persisted to settings. `seed:jira` pushes the synthetic dataset into a real (or fake, via `--fake` / `ECP_JIRA_FAKE=true`) instance. The next milestone is **Phase 8 (export/import, polish & packaging)**.
 
 ---
 
@@ -179,7 +179,12 @@ Net effect: we get an easy, fully local test loop today, and a clean seam to plu
 **Still open**
 
 - Whether Gantt `(lane × week)` cells should later carry a **non-capacity** signal (assignee on PTO that week / upstream dependency not Done) in a distinct hue.
-- Sprint sync mechanics: how sprints and their date ranges are read from Jira (board/sprint API vs a mapped field) — resolved during Phase 7.
+
+**Resolved in Phase 7**
+
+- Sprint sync mechanics: sprints and their date ranges are read from the **Agile board API** (`GET /rest/agile/1.0/board/{id}/sprint`), with the board auto-discovered from the project (overridable via `jira_board_id`). The Jira datetime is trimmed to a calendar date for the Gantt's week columns.
+- Hierarchy mapping: epic → stories → work items is read by **parent-chain depth**, not issue-type names, so it works across team- and company-managed projects.
+- Status fidelity on the seed path is applied via **workflow transitions** (Jira can't set status on create); assignees need real accountIds on live Jira (`--no-assignee` otherwise).
 
 ---
 

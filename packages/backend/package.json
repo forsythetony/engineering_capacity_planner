@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "seed": "tsx src/scripts/seed.ts",
+    "seed:local": "tsx src/scripts/seed.ts",
+    "seed:jira": "tsx src/scripts/seed-jira.ts",
     "export:fixture": "tsx src/scripts/export-fixture.ts",
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js"
