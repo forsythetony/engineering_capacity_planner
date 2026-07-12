@@ -24,9 +24,9 @@ describe('scopeEpic', () => {
 });
 
 describe('runScenario', () => {
-  it('produces a verdict consistent with the pure engine', () => {
+  it('opens the default scenario in the yellow band (calibrated fixture)', () => {
     const r = runScenario(scope, baseScenario());
-    expect(['green', 'yellow', 'red']).toContain(r.verdict);
+    expect(r.verdict).toBe('yellow');
     expect(r.gatingDate).toBe(scope.gating.date);
   });
 

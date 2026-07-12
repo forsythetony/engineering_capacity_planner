@@ -1,5 +1,6 @@
 import type { WorkItem } from '@ecp/shared';
 import type { EpicScope, Scenario } from '../lib/projection';
+import { JiraLink } from './JiraLink';
 
 interface WorkItemListProps {
   scope: EpicScope;
@@ -43,7 +44,10 @@ export function WorkItemList({ scope, scenario, onToggleCut, onToggleDone }: Wor
                   data-testid={`work-item-${item.key}`}
                 >
                   <span>
-                    <strong>{item.key}</strong> {item.title}
+                    <strong>{item.key}</strong>
+                    <JiraLink jiraKey={item.key} />
+                    {' '}
+                    {item.title}
                   </span>
                   <span className="points">{item.points} pt</span>
                   <span className={`badge${isDone ? ' done' : ''}`}>

@@ -68,4 +68,37 @@ test.describe('Dependencies tab', () => {
     await page.getByTestId('tab-timeline').click();
     await expect(page.getByTestId('timeline')).toBeVisible();
   });
+
+  test('clicking a leaderboard entry focuses the graph on that subtree', async ({ page }) => {
+    await page.goto('/');
+    await page.getByTestId('tab-dependencies').click();
+
+    const svg = page.getByTestId('dependency-svg');
+    const before = await svg.locator('.graph-node').count();
+
+    // Focus the top blocker via the leaderboard.
+    await page.getByTestId('leverage-list').locator('.leverage-row').first().click();
+
+    const banner = page.getByTestId('graph-focus-banner');
+    await expect(banner).toBeVisible();
+    // The focused view shows a strict subset of the full graph.
+    await expect(svg.locator('.graph-node.is-focused')).toHaveCount(1);
+    const after = await svg.locator('.graph-node').count();
+    expect(after).toBeLessThan(before);
+
+    // "Show all" restores the full graph.
+    await page.getByTestId('graph-show-all').click();
+    await expect(banner).toBeHidden();
+    await expect(svg.locator('.graph-node')).toHaveCount(before);
+  });
+});
+
+test.describe('Jira link affordance', () => {
+  test('renders an inert Jira link icon on the epic and work items', async ({ page }) => {
+    await page.goto('/');
+    // Epic header link.
+    await expect(page.getByTestId('jira-link-CKT')).toBeVisible();
+    // Backlog rows each carry one.
+    await expect(page.locator('[data-testid^="jira-link-CKT-"]').first()).toBeVisible();
+  });
 });

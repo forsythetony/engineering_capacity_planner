@@ -95,21 +95,21 @@
       "id": "MS1",
       "epicKey": "CKT",
       "name": "Feature freeze",
-      "date": "2026-07-23",
+      "date": "2026-08-28",
       "isGating": false
     },
     {
       "id": "MS2",
       "epicKey": "CKT",
       "name": "First QA in stage pass",
-      "date": "2026-07-28",
+      "date": "2026-09-02",
       "isGating": true
     },
     {
       "id": "MS3",
       "epicKey": "CKT",
       "name": "Launch",
-      "date": "2026-08-11",
+      "date": "2026-09-16",
       "isGating": false
     }
   ],

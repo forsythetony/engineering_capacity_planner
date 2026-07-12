@@ -36,6 +36,8 @@ export interface LayoutNode {
   tier: LeverageTier;
   done: boolean;
   cut: boolean;
+  /** True when this is the node the graph is currently focused on. */
+  focused: boolean;
 }
 
 export interface LayoutEdge {
@@ -58,6 +60,44 @@ export interface GraphLayout {
   width: number;
   height: number;
   analysis: GraphAnalysis;
+  /** The node the graph is focused on, or `null` when showing everything. */
+  focusKey: string | null;
+}
+
+/**
+ * The connected subtree of `focusKey`: the node itself, everything that
+ * transitively blocks it (its upstream, "what unblocks this"), and everything
+ * it transitively blocks (its downstream, "what this unblocks"). Used to filter
+ * the graph to one ticket's dependency neighbourhood.
+ */
+export function subtreeKeys(
+  dependencies: readonly { blockerItemKey: string; blockedItemKey: string }[],
+  focusKey: string,
+): Set<string> {
+  const downstream = new Map<string, string[]>(); // blocker -> blocked[]
+  const upstream = new Map<string, string[]>(); // blocked -> blocker[]
+  for (const d of dependencies) {
+    (downstream.get(d.blockerItemKey) ?? downstream.set(d.blockerItemKey, []).get(d.blockerItemKey)!).push(
+      d.blockedItemKey,
+    );
+    (upstream.get(d.blockedItemKey) ?? upstream.set(d.blockedItemKey, []).get(d.blockedItemKey)!).push(
+      d.blockerItemKey,
+    );
+  }
+
+  const keep = new Set<string>([focusKey]);
+  const walk = (adj: Map<string, string[]>, start: string): void => {
+    const stack = [...(adj.get(start) ?? [])];
+    while (stack.length > 0) {
+      const node = stack.pop()!;
+      if (keep.has(node)) continue;
+      keep.add(node);
+      stack.push(...(adj.get(node) ?? []));
+    }
+  };
+  walk(downstream, focusKey);
+  walk(upstream, focusKey);
+  return keep;
 }
 
 /** Box + spacing geometry. Exported so tests can assert exact coordinates. */
@@ -102,13 +142,30 @@ function withinLayerOrder(a: GraphNodeAnalysis, b: GraphNodeAnalysis): number {
   );
 }
 
-/** Build the full positioned layout for the epic's dependency graph. */
-export function buildGraphLayout(scope: EpicScope, scenario: Scenario): GraphLayout {
+/**
+ * Build the positioned layout for the epic's dependency graph. When `focusKey`
+ * names a work item, the layout is restricted to that ticket's connected
+ * subtree (its blockers and everything it unblocks); otherwise the whole epic
+ * is laid out.
+ */
+export function buildGraphLayout(
+  scope: EpicScope,
+  scenario: Scenario,
+  focusKey: string | null = null,
+): GraphLayout {
   const { nodeWidth, nodeHeight, colGap, rowGap, padding } = GRAPH_GEOMETRY;
 
-  const items = new Map(scope.workItems.map((w) => [w.key, w]));
-  const keys = scope.workItems.map((w) => w.key);
-  const edges = scope.dependencies.map((d) => ({
+  const hasFocus = focusKey !== null && scope.workItems.some((w) => w.key === focusKey);
+  const keep = hasFocus ? subtreeKeys(scope.dependencies, focusKey!) : null;
+
+  const scopedItems = keep ? scope.workItems.filter((w) => keep.has(w.key)) : scope.workItems;
+  const scopedDeps = keep
+    ? scope.dependencies.filter((d) => keep.has(d.blockerItemKey) && keep.has(d.blockedItemKey))
+    : scope.dependencies;
+
+  const items = new Map(scopedItems.map((w) => [w.key, w]));
+  const keys = scopedItems.map((w) => w.key);
+  const edges = scopedDeps.map((d) => ({
     blocker: d.blockerItemKey,
     blocked: d.blockedItemKey,
   }));
@@ -138,6 +195,7 @@ export function buildGraphLayout(scope: EpicScope, scenario: Scenario): GraphLay
         directDependents: node.directDependents,
         transitiveDependents: node.transitiveDependents,
         tier: leverageTier(node.transitiveDependents),
+        focused: hasFocus && node.key === focusKey,
         ...nodeState(item, scenario),
       };
       nodes.push(layout);
@@ -167,5 +225,5 @@ export function buildGraphLayout(scope: EpicScope, scenario: Scenario): GraphLay
   const width = analysis.layerCount === 0 ? 0 : padding * 2 + analysis.layerCount * nodeWidth + (analysis.layerCount - 1) * colGap;
   const height = rows === 0 ? 0 : padding * 2 + rows * nodeHeight + (rows - 1) * rowGap;
 
-  return { nodes, edges: edgesOut, width, height, analysis };
+  return { nodes, edges: edgesOut, width, height, analysis, focusKey: hasFocus ? focusKey : null };
 }

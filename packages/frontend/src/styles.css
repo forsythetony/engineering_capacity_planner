@@ -395,6 +395,39 @@ button.tab:hover:not(.active) {
   margin-top: 8px;
 }
 
+/* --- Jira link icon (reused: header, backlog rows, graph nodes) --- */
+.jira-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  margin: 0 2px;
+  vertical-align: middle;
+  cursor: pointer;
+}
+.jira-link:hover {
+  color: var(--accent);
+}
+.jira-link.inert {
+  cursor: help;
+}
+.epic-title .jira-link {
+  font-size: 13px;
+}
+.work-item .jira-link {
+  font-size: 12px;
+}
+/* In-SVG variant on graph nodes. */
+.node-jira {
+  color: var(--muted);
+}
+.graph-node:hover .node-jira {
+  color: var(--text);
+}
+.node-jira:hover {
+  color: var(--accent);
+}
+
 /* --- Dependency graph --- */
 .graph-warning {
   font-size: 12px;
@@ -403,6 +436,19 @@ button.tab:hover:not(.active) {
   border: 1px solid var(--yellow-dim);
   border-radius: 8px;
   padding: 8px 10px;
+  margin-bottom: 12px;
+}
+.graph-focus-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-radius: 8px;
+  padding: 8px 12px;
   margin-bottom: 12px;
 }
 .graph-legend {
@@ -464,10 +510,28 @@ button.tab:hover:not(.active) {
 }
 
 /* Nodes */
+.graph-node {
+  cursor: pointer;
+}
 .graph-node .node-box {
   fill: var(--panel-2);
   stroke: var(--border);
   stroke-width: 1;
+}
+.graph-node:hover .node-box {
+  stroke: var(--text);
+}
+.graph-node.is-focused .node-box {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+}
+.graph-node .node-metrics {
+  fill: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.graph-node.tier-high .node-metrics {
+  fill: var(--accent);
 }
 .graph-node.tier-high .node-box {
   fill: color-mix(in srgb, var(--accent) 20%, var(--panel-2));
@@ -493,34 +557,33 @@ button.tab:hover:not(.active) {
   fill: var(--muted);
   font-size: 10px;
 }
-.graph-node .node-points,
-.graph-node .node-leverage {
-  fill: var(--muted);
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
-}
-.graph-node.tier-high .node-leverage {
-  fill: var(--accent);
-  font-weight: 600;
-}
 
 /* Leverage leaderboard */
 .leverage-list {
   list-style: none;
   margin: 0;
   padding: 0;
-  counter-reset: lev;
 }
 .leverage-list li {
+  margin-bottom: 6px;
+}
+.leverage-list .leverage-row {
   display: flex;
   align-items: center;
   gap: 10px;
+  width: 100%;
+  text-align: left;
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  margin-bottom: 6px;
   background: var(--panel-2);
+  color: var(--text);
   font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.leverage-list .leverage-row:hover {
+  border-color: var(--accent);
 }
 .leverage-list .leverage-title {
   color: var(--muted);
