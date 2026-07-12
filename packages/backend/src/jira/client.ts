@@ -50,4 +50,10 @@ export interface JiraClient {
   createIssue(input: JiraCreateIssueInput): Promise<JiraCreatedIssue>;
   /** `POST /rest/api/3/issueLink`. */
   createIssueLink(input: JiraCreateLinkInput): Promise<void>;
+  /**
+   * Move an issue to a named status via a workflow transition (status can't be
+   * set on create in Jira). Best-effort: a no-op if no transition reaches the
+   * target status. Used by `seed:jira` to reproduce the dataset's statuses.
+   */
+  setStatus(issueKey: string, statusName: string): Promise<void>;
 }

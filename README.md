@@ -141,6 +141,40 @@ Seeded synthetic dataset → ./data/ecp.db (seed=1)
     ...
 ```
 
+## Jira Synchronization (Phase 7)
+
+The app can pull its data from a real Jira project instead of the synthetic
+generator. **Jira owns facts** (epics, stories, work items, points, status,
+labels, dependencies, sprints); **the local database owns intent** (PTO,
+on-call, velocity, milestones, knobs, and the Gantt placements). A **Sync**
+re-imports the facts and reconciles them onto local state without losing your
+plan — completed tickets are auto-pulled from their future week, freeing
+capacity.
+
+**Credentials** (`JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`) live in the
+environment only, never in the database. **Field mapping** (which custom field
+is story points, the sprint field, the "blocks" link type, …) is set in the app
+— Configuration → Jira mapping resolves it from a live sample of your board —
+and persisted to the database.
+
+Prove the loop end-to-end against a real instance:
+
+```bash
+# 1. Push the synthetic dataset INTO your Jira (creates an epic + its subtree):
+npm run seed:jira -w @ecp/backend -- --no-assignee     # prints the new epic key
+# 2. Point the app at it and pull it back:
+#    set ECP_DATA_SOURCE=jira + the JIRA_* mapping in .env, then:
+npm run dev                                             # hit Sync in the UI
+
+# No Jira handy? Run the whole push against an in-memory fake:
+npm run seed:jira -w @ecp/backend -- --fake
+```
+
+The client targets the current Jira Cloud REST v3 + Agile APIs (cursor-paginated
+`search/jql`, the standard `parent` field, workflow transitions for status). An
+in-memory `FakeJiraClient` mirrors those exact shapes, so the full
+push → sync → reconcile round-trip is covered headlessly in the test suite.
+
 ## Project Layout
 
 ```

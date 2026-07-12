@@ -122,4 +122,14 @@ export class HttpJiraClient implements JiraClient {
       outwardIssue: { key: input.outwardKey },
     });
   }
+
+  async setStatus(issueKey: string, statusName: string): Promise<void> {
+    const path = `/rest/api/3/issue/${encodeURIComponent(issueKey)}/transitions`;
+    const { transitions } = await this.request<{
+      transitions: Array<{ id: string; name: string; to?: { name: string } }>;
+    }>('GET', path);
+    const match = transitions.find((t) => t.to?.name === statusName || t.name === statusName);
+    if (!match) return; // best-effort: workflow has no path to this status
+    await this.request<void>('POST', path, { transition: { id: match.id } });
+  }
 }

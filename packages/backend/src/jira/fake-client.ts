@@ -207,6 +207,12 @@ export class FakeJiraClient implements JiraClient {
     return { id, key, self: `https://fake.atlassian.net/rest/api/3/issue/${id}` };
   }
 
+  async setStatus(issueKey: string, statusName: string): Promise<void> {
+    const issue = this.issues.get(issueKey);
+    if (!issue) throw new Error(`Fake Jira: setStatus on missing issue ${issueKey}`);
+    issue.fields.status = statusFor(statusName);
+  }
+
   async createIssueLink(input: JiraCreateLinkInput): Promise<void> {
     const type = this.linkTypes.find((t) => t.name === input.type);
     if (!type) throw new Error(`Fake Jira: unknown link type "${input.type}"`);
