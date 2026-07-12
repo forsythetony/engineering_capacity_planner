@@ -62,11 +62,11 @@ function Planner({
   const epicKey = dataset.epics[0]!.key;
   const scope = useMemo(() => scopeEpic(dataset, epicKey), [dataset, epicKey]);
 
-  // Cuts and mark-done are the only timeline-local scenario edits now that the
-  // planning knobs (today / green-buffer / on-call) live on the Configuration
-  // tab. Those values are read straight from the persisted defaults below so the
-  // timeline always reflects the current configuration, including after a save.
-  const [selection, setSelection] = useState<{
+  // The planning knobs (today / green-buffer / on-call) live on the
+  // Configuration tab and are read straight from the persisted defaults below,
+  // so the timeline always reflects the current configuration. Cut / mark-done
+  // are temporarily removed, so no scenario edits happen on the timeline for now.
+  const [selection] = useState<{
     cutItemKeys: Set<string>;
     doneItemKeys: Set<string>;
   }>(() => ({ cutItemKeys: new Set(), doneItemKeys: new Set() }));
@@ -85,14 +85,6 @@ function Planner({
 
   const [tab, setTab] = useState<'timeline' | 'dependencies' | 'configuration'>('timeline');
   const result = useMemo(() => runScenario(scope, scenario), [scope, scenario]);
-
-  const toggleInSet = (key: 'cutItemKeys' | 'doneItemKeys', itemKey: string) =>
-    setSelection((s) => {
-      const next = new Set(s[key]);
-      if (next.has(itemKey)) next.delete(itemKey);
-      else next.add(itemKey);
-      return { ...s, [key]: next };
-    });
 
   return (
     <div className="app">
@@ -151,12 +143,7 @@ function Planner({
           </div>
 
           <div className="panel">
-            <WorkItemList
-              scope={scope}
-              scenario={scenario}
-              onToggleCut={(k) => toggleInSet('cutItemKeys', k)}
-              onToggleDone={(k) => toggleInSet('doneItemKeys', k)}
-            />
+            <WorkItemList scope={scope} scenario={scenario} />
           </div>
         </>
       )}

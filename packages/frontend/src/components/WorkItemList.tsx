@@ -5,15 +5,10 @@ import { JiraLink } from './JiraLink';
 interface WorkItemListProps {
   scope: EpicScope;
   scenario: Scenario;
-  onToggleCut: (key: string) => void;
-  onToggleDone: (key: string) => void;
 }
 
-/**
- * The epic's backlog, grouped by story. Each row can be cut (removed from the
- * plan) or marked done — both re-run the projection live via the parent.
- */
-export function WorkItemList({ scope, scenario, onToggleCut, onToggleDone }: WorkItemListProps) {
+/** The epic's backlog, grouped by story. */
+export function WorkItemList({ scope, scenario }: WorkItemListProps) {
   const byStory = new Map<string, WorkItem[]>();
   for (const item of scope.workItems) {
     const list = byStory.get(item.storyKey) ?? [];
@@ -25,7 +20,7 @@ export function WorkItemList({ scope, scenario, onToggleCut, onToggleDone }: Wor
     <div data-testid="work-items">
       <div className="section-title">
         <h2>Backlog</h2>
-        <span className="hint">Cut a ticket or mark it done to see the timeline move.</span>
+        <span className="hint">The epic's remaining work, grouped by story.</span>
       </div>
 
       {scope.stories.map((story) => {
@@ -52,24 +47,6 @@ export function WorkItemList({ scope, scenario, onToggleCut, onToggleDone }: Wor
                   <span className="points">{item.points} pt</span>
                   <span className={`badge${isDone ? ' done' : ''}`}>
                     {isCut ? 'cut' : isDone ? 'Done' : item.status}
-                  </span>
-                  <span style={{ display: 'flex', gap: 8 }}>
-                    <button
-                      type="button"
-                      className="link-btn"
-                      data-testid={`toggle-done-${item.key}`}
-                      onClick={() => onToggleDone(item.key)}
-                    >
-                      {scenario.doneItemKeys.has(item.key) ? 'undo done' : 'mark done'}
-                    </button>
-                    <button
-                      type="button"
-                      className="link-btn"
-                      data-testid={`toggle-cut-${item.key}`}
-                      onClick={() => onToggleCut(item.key)}
-                    >
-                      {isCut ? 'restore' : 'cut'}
-                    </button>
                   </span>
                 </div>
               );
