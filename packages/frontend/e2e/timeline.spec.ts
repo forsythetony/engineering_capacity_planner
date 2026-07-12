@@ -19,28 +19,17 @@ test.describe('Calendar / timeline tab', () => {
     await expect(page.getByTestId('marker-devcomplete')).toBeVisible();
   });
 
-  test('recomputes live: cutting the backlog and adjusting the threshold', async ({ page }) => {
+  test('renders the backlog grouped by story, without cut / mark-done controls', async ({ page }) => {
     await page.goto('/');
-    const strip = page.getByTestId('status-strip');
-    const remaining = page.getByTestId('remaining-points');
-    expect(Number(await remaining.textContent())).toBeGreaterThan(0);
 
-    // Cut every ticket → nothing remains → green. Re-query the first remaining
-    // "cut" button each time (rows re-render as their label flips to "restore").
-    const cutButtons = page.getByRole('button', { name: 'cut', exact: true });
-    for (let guard = 0; guard < 100 && (await cutButtons.count()) > 0; guard++) {
-      await cutButtons.first().click();
-    }
-    await expect(remaining).toHaveText('0');
-    await expect(strip).toHaveAttribute('data-verdict', 'green');
+    const backlog = page.getByTestId('work-items');
+    await expect(backlog).toBeVisible();
+    // Backlog rows render from the fixture.
+    await expect(page.locator('[data-testid^="work-item-"]').first()).toBeVisible();
 
-    // Demanding an impossibly large buffer downgrades it live…
-    await page.getByTestId('green-min-input').fill('999');
-    await expect(strip).not.toHaveAttribute('data-verdict', 'green');
-
-    // …and relaxing the threshold brings it back to green.
-    await page.getByTestId('green-min-input').fill('0');
-    await expect(strip).toHaveAttribute('data-verdict', 'green');
+    // The cut / mark-done affordances have been removed for now.
+    await expect(page.locator('[data-testid^="toggle-cut-"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid^="toggle-done-"]')).toHaveCount(0);
   });
 });
 

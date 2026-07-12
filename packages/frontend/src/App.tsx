@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { DomainDataset } from '@ecp/shared';
 import { Configuration } from './components/Configuration';
-import { Controls } from './components/Controls';
 import { DependencyGraph } from './components/DependencyGraph';
 import { GanttBoard } from './components/GanttBoard';
 import { JiraLink } from './components/JiraLink';
@@ -64,30 +63,31 @@ function Planner({
   const epicKey = dataset.epics[0]!.key;
   const scope = useMemo(() => scopeEpic(dataset, epicKey), [dataset, epicKey]);
 
-  const initialScenario = (): Scenario => ({
-    // Demo data pins a reproducible "today"; real data uses the actual date.
-    today: scope.planningToday ?? currentIsoDate(),
-    cutItemKeys: new Set(),
-    doneItemKeys: new Set(),
-    greenMinBufferDays: scope.defaults.greenMinBufferDays,
-    oncallMultiplier: scope.defaults.oncallMultiplier,
-  });
+  // The planning knobs (today / green-buffer / on-call) live on the
+  // Configuration tab and are read straight from the persisted defaults below,
+  // so the timeline always reflects the current configuration. Cut / mark-done
+  // are temporarily removed, so no scenario edits happen on the timeline for now.
+  const [selection] = useState<{
+    cutItemKeys: Set<string>;
+    doneItemKeys: Set<string>;
+  }>(() => ({ cutItemKeys: new Set(), doneItemKeys: new Set() }));
 
-  const [scenario, setScenario] = useState<Scenario>(initialScenario);
+  const scenario = useMemo<Scenario>(
+    () => ({
+      // Demo data pins a reproducible "today"; real data uses the actual date.
+      today: scope.planningToday ?? currentIsoDate(),
+      cutItemKeys: selection.cutItemKeys,
+      doneItemKeys: selection.doneItemKeys,
+      greenMinBufferDays: scope.defaults.greenMinBufferDays,
+      oncallMultiplier: scope.defaults.oncallMultiplier,
+    }),
+    [scope, selection],
+  );
+
   const [tab, setTab] = useState<'timeline' | 'dependencies' | 'gantt' | 'configuration'>(
     'timeline',
   );
   const result = useMemo(() => runScenario(scope, scenario), [scope, scenario]);
-
-  const patch = (p: Partial<Scenario>) => setScenario((s) => ({ ...s, ...p }));
-
-  const toggleInSet = (key: keyof Pick<Scenario, 'cutItemKeys' | 'doneItemKeys'>, itemKey: string) =>
-    setScenario((s) => {
-      const next = new Set(s[key]);
-      if (next.has(itemKey)) next.delete(itemKey);
-      else next.add(itemKey);
-      return { ...s, [key]: next };
-    });
 
   return (
     <div className="app">
@@ -154,20 +154,7 @@ function Planner({
           </div>
 
           <div className="panel">
-            <Controls
-              scenario={scenario}
-              onChange={patch}
-              onReset={() => setScenario(initialScenario())}
-            />
-          </div>
-
-          <div className="panel">
-            <WorkItemList
-              scope={scope}
-              scenario={scenario}
-              onToggleCut={(k) => toggleInSet('cutItemKeys', k)}
-              onToggleDone={(k) => toggleInSet('doneItemKeys', k)}
-            />
+            <WorkItemList scope={scope} scenario={scenario} />
           </div>
         </>
       )}

@@ -166,20 +166,19 @@ button.tab:hover:not(.active) {
 /* --- Timeline --- */
 .timeline {
   position: relative;
-  height: 156px;
   margin-top: 26px;
 }
 .timeline-axis {
   position: absolute;
   left: 0;
   right: 0;
-  top: 70px;
+  top: var(--axis-top);
   height: 2px;
   background: var(--border);
 }
 .sprint-band {
   position: absolute;
-  top: 58px;
+  top: calc(var(--axis-top) - 12px);
   height: 26px;
   border-left: 1px dashed var(--border);
   font-size: 10px;
@@ -190,7 +189,7 @@ button.tab:hover:not(.active) {
 }
 .month-tick {
   position: absolute;
-  top: 78px;
+  top: calc(var(--axis-top) + 8px);
   transform: translateX(-50%);
   font-size: 11px;
   color: var(--muted);
@@ -204,41 +203,36 @@ button.tab:hover:not(.active) {
   height: 8px;
   background: var(--border);
 }
+/* A marker is a thin anchor at its date; label and line are positioned
+   absolutely within it (top / height set inline from the marker's lane). */
 .marker {
   position: absolute;
-  top: 6px;
-  transform: translateX(-50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: max-content;
-  max-width: 140px;
+  top: 0;
+  width: 2px;
+  transform: translateX(-1px);
+  pointer-events: none;
 }
 .marker .marker-line {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   width: 2px;
-  height: 64px;
   background: var(--muted);
 }
 .marker .marker-label {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 132px;
   font-size: 11px;
   color: var(--muted);
   text-align: center;
-  margin-bottom: 3px;
   line-height: 1.2;
 }
 .marker .marker-date {
   font-weight: 600;
   color: var(--text);
-}
-.marker.below {
-  top: 70px;
-}
-.marker.below .marker-line {
-  height: 22px;
-}
-.marker.below .marker-label {
-  margin-top: 4px;
-  margin-bottom: 0;
 }
 .marker.today .marker-line {
   background: var(--accent);
@@ -301,10 +295,6 @@ button.tab:hover:not(.active) {
   border-radius: 8px;
   padding: 7px 9px;
   font-size: 13px;
-}
-.control .range-value {
-  font-variant-numeric: tabular-nums;
-  color: var(--text);
 }
 .btn {
   background: var(--panel-2);

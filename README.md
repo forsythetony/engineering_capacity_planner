@@ -152,7 +152,7 @@ packages/
     test/       vitest suites
   frontend/   @ecp/frontend — React + Vite Calendar/Timeline tab
     src/
-      components/ StatusStrip, Timeline, Controls, WorkItemList
+      components/ StatusStrip, Timeline, WorkItemList
       lib/        projection.ts, timeline.ts, format.ts
       data/       loadDataset.ts, fixtures/dataset.json
     test/       vitest logic suites
