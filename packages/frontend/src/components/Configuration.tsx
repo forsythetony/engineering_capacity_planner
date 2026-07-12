@@ -92,12 +92,46 @@ function KnobsSection({ dataset, disabled, run }: { dataset: DomainDataset; disa
   return (
     <section className="panel">
       <SectionTitle title="Planning knobs" hint="Defaults that drive the red/yellow/green verdict." />
+
+      <div className="knob-explainer" data-testid="knob-explainer">
+        <p>
+          The verdict compares the epic's <strong>projected dev-complete date</strong> — the
+          remaining story points burned down through the team's real capacity, one working day at
+          a time — against its <strong>gating relevant day</strong>. The <strong>buffer</strong> is
+          the number of working days between the two, and the band is:
+        </p>
+        <ul className="verdict-legend">
+          <li>
+            <span className="dot green" /> <strong>Green</strong> — buffer ≥ the green threshold
+            below (comfortable slack)
+          </li>
+          <li>
+            <span className="dot yellow" /> <strong>Yellow</strong> — 0 ≤ buffer &lt; the threshold
+            (finishes in time, but eats into the slack)
+          </li>
+          <li>
+            <span className="dot red" /> <strong>Red</strong> — buffer &lt; 0 (projected to finish
+            after the gating day)
+          </li>
+        </ul>
+        <p className="knob-note">
+          Capacity itself comes from each member's velocity, minus PTO, minus the on-call drag set
+          here — all editable in the sections below.
+        </p>
+      </div>
+
       <div className="controls">
-        <Field label="On-call multiplier">
+        <Field
+          label="On-call multiplier"
+          help="Output of someone on call, as a fraction of normal: 0 = fully consumed by on-call, 1 = no impact. Lower values shrink capacity during on-call rotations, pushing the projected finish later."
+        >
           <input type="number" min={0} max={1} step={0.05} value={oncall} disabled={disabled}
             data-testid="cfg-oncall-mult" onChange={(e) => setOncall(e.target.value)} />
         </Field>
-        <Field label="Green buffer ≥ (working days)">
+        <Field
+          label="Green buffer ≥ (working days)"
+          help="How many working days of slack you want before the gating day. At or above this the epic is green; between 0 and this it's yellow."
+        >
           <input type="number" min={0} max={60} value={green} disabled={disabled}
             data-testid="cfg-green" onChange={(e) => setGreen(e.target.value)} />
         </Field>
@@ -427,11 +461,12 @@ function SectionTitle({ title, hint }: { title: string; hint: string }) {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children, help }: { label: string; children: React.ReactNode; help?: string }) {
   return (
     <div className="control">
       <label>{label}</label>
       {children}
+      {help && <span className="field-help">{help}</span>}
     </div>
   );
 }
