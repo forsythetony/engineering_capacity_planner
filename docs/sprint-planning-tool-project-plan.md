@@ -134,6 +134,8 @@ Net effect: we get an easy, fully local test loop today, and a clean seam to plu
 - **Sync back and reconcile** — pull the same data out through the importer and reconcile it against local state, honoring the `planned_placement` intent layer (facts from Jira, intent stays local; completed tickets auto-pulled from future slots).
 - **Resilient, configurable field mapping** — the tool works with whatever fields a team *already has*. Story-points field, the labels that feed lanes, the sprint field, and the "blocks" link type are all mapped via settings, not hard-coded. The core value survives even when a team's Jira doesn't look exactly like ours — they map what they have and it works.
 
+**Phase 7.1 — Guided setup wizard + always-visible sync freshness.** An empty install shouldn't require hand-editing settings or memorizing `customfield_*` ids. The Configuration tab now hosts a **Connect → Board → Epic → Fields → Members** wizard driven by live Jira search: typeaheads for the board, the epic to track, and team members, all hitting Jira under the hood so the user *points at* real things. The **Connect** step is a read-only connectivity check (credentials stay in the environment, never in the shareable DB — decision below). The **Members** step searches Jira's people picker to add teammates, or links a hand-created member to their Jira account via a new `team_member.jira_account_id`, so a synced assignee folds onto the existing person (with their local velocity / PTO intact) instead of spawning a duplicate. A **Sync button lives in the top navigation** on every tab: its color tracks freshness — green under an hour since the last sync, yellow under a day, red beyond a day (or never), aging on a one-minute tick — and it's **locked until the required mapping is complete**, opening a modal that routes the user to setup rather than silently failing.
+
 ---
 
 ## 8. Testing / self-validation strategy (my inner loop)
@@ -185,6 +187,12 @@ Net effect: we get an easy, fully local test loop today, and a clean seam to plu
 - Sprint sync mechanics: sprints and their date ranges are read from the **Agile board API** (`GET /rest/agile/1.0/board/{id}/sprint`), with the board auto-discovered from the project (overridable via `jira_board_id`). The Jira datetime is trimmed to a calendar date for the Gantt's week columns.
 - Hierarchy mapping: epic → stories → work items is read by **parent-chain depth**, not issue-type names, so it works across team- and company-managed projects.
 - Status fidelity on the seed path is applied via **workflow transitions** (Jira can't set status on create); assignees need real accountIds on live Jira (`--no-assignee` otherwise).
+
+**Resolved in Phase 7.1 (setup wizard)**
+
+- **Credentials stay in the environment**, not the UI/DB — the wizard's Connect step is a status check (`GET /rest/api/3/myself`), preserving the "shareable DB carries no secrets" invariant. Base URL / email / token come from `JIRA_*` env vars.
+- **One tracked epic** for now (driven by a typeahead rather than a text field); the setting stays a single `jira_epic_key`, extensible to a set later.
+- Sync "configured" gate = the three values `resolveMapping` requires (project key, story-points field, "blocks" link type), shared as `isMappingComplete()` so the backend and the nav Sync button agree.
 
 ---
 
