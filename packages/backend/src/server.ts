@@ -3,6 +3,8 @@ import { type AppConfig, loadConfig, loadDotenv } from './config.js';
 import { openDatabase } from './db/database.js';
 import { readDataset, writeDataset } from './db/persist.js';
 import { createImporter } from './importer/factory.js';
+import { HttpError } from './http-error.js';
+import { registerConfigRoutes } from './routes/config.js';
 
 /**
  * Minimal localhost API serving the domain data to the frontend.
@@ -27,12 +29,22 @@ export async function buildServer(overrides: Partial<AppConfig> = {}) {
     }
   }
 
-  // CORS origin is configurable; `*` by default for local dev (read-only API).
+  // CORS origin is configurable; `*` by default for local dev. The
+  // Configuration tab writes, so the mutating verbs are allowed too.
   app.addHook('onRequest', async (req, reply) => {
     reply.header('Access-Control-Allow-Origin', config.corsOrigin);
-    reply.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    reply.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
     reply.header('Access-Control-Allow-Headers', 'Content-Type');
     if (req.method === 'OPTIONS') reply.send();
+  });
+
+  // Translate typed HttpErrors into their status codes; everything else 500s.
+  app.setErrorHandler((error, _req, reply) => {
+    if (error instanceof HttpError) {
+      return reply.code(error.statusCode).send({ error: error.message });
+    }
+    app.log.error(error);
+    return reply.code(500).send({ error: 'Internal Server Error' });
   });
 
   app.get('/health', async () => ({ status: 'ok', dataSource: config.dataSource }));
@@ -51,6 +63,9 @@ export async function buildServer(overrides: Partial<AppConfig> = {}) {
   });
 
   app.get('/api/dataset', async () => readDataset(db));
+
+  // Mutating Configuration-tab endpoints (project plan §6).
+  registerConfigRoutes(app, db);
 
   app.addHook('onClose', async () => {
     db.close();

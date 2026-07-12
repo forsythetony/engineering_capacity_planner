@@ -102,3 +102,26 @@ test.describe('Jira link affordance', () => {
     await expect(page.locator('[data-testid^="jira-link-CKT-"]').first()).toBeVisible();
   });
 });
+
+test.describe('Configuration tab', () => {
+  test('renders the knobs dashboard; read-only without a backend', async ({ page }) => {
+    await page.goto('/');
+    await page.getByTestId('tab-configuration').click();
+
+    const config = page.getByTestId('configuration');
+    await expect(config).toBeVisible();
+    // Every knobs section is present.
+    await expect(page.getByTestId('cfg-members')).toBeVisible();
+    await expect(page.getByTestId('cfg-milestones')).toBeVisible();
+    await expect(page.getByTestId('cfg-pto')).toBeVisible();
+
+    // The e2e harness runs without a backend, so editing is disabled and the
+    // read-only notice explains why.
+    await expect(page.getByTestId('config-readonly')).toBeVisible();
+    await expect(page.getByTestId('cfg-knobs-save')).toBeDisabled();
+    await expect(page.getByTestId('cfg-oncall-mult')).toBeDisabled();
+
+    // The gating relevant day is flagged in the list.
+    await expect(page.locator('.config-row.gating')).toHaveCount(1);
+  });
+});

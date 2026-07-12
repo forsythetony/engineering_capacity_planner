@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { DomainDataset } from '@ecp/shared';
+import { Configuration } from './components/Configuration';
 import { Controls } from './components/Controls';
 import { DependencyGraph } from './components/DependencyGraph';
 import { JiraLink } from './components/JiraLink';
@@ -30,6 +31,13 @@ export function App() {
     };
   }, []);
 
+  // Silent re-fetch after a config write: swaps the dataset in place without
+  // flipping to the loading state, so the current tab/scenario is preserved.
+  const reload = useCallback(async () => {
+    const { dataset, source } = await loadDataset();
+    setState({ status: 'ready', dataset, source });
+  }, []);
+
   if (state.status === 'loading') {
     return (
       <div className="app">
@@ -40,10 +48,18 @@ export function App() {
     );
   }
 
-  return <Planner dataset={state.dataset} source={state.source} />;
+  return <Planner dataset={state.dataset} source={state.source} onReload={reload} />;
 }
 
-function Planner({ dataset, source }: { dataset: DomainDataset; source: DatasetSource }) {
+function Planner({
+  dataset,
+  source,
+  onReload,
+}: {
+  dataset: DomainDataset;
+  source: DatasetSource;
+  onReload: () => Promise<void>;
+}) {
   const epicKey = dataset.epics[0]!.key;
   const scope = useMemo(() => scopeEpic(dataset, epicKey), [dataset, epicKey]);
 
@@ -57,7 +73,7 @@ function Planner({ dataset, source }: { dataset: DomainDataset; source: DatasetS
   });
 
   const [scenario, setScenario] = useState<Scenario>(initialScenario);
-  const [tab, setTab] = useState<'timeline' | 'dependencies'>('timeline');
+  const [tab, setTab] = useState<'timeline' | 'dependencies' | 'configuration'>('timeline');
   const result = useMemo(() => runScenario(scope, scenario), [scope, scenario]);
 
   const patch = (p: Partial<Scenario>) => setScenario((s) => ({ ...s, ...p }));
@@ -99,9 +115,14 @@ function Planner({ dataset, source }: { dataset: DomainDataset; source: DatasetS
           >
             Dependencies
           </button>
-          <span className="tab disabled" title="Phase 5">
+          <button
+            type="button"
+            className={`tab${tab === 'configuration' ? ' active' : ''}`}
+            data-testid="tab-configuration"
+            onClick={() => setTab('configuration')}
+          >
             Configuration
-          </span>
+          </button>
         </nav>
       </header>
 
@@ -109,9 +130,9 @@ function Planner({ dataset, source }: { dataset: DomainDataset; source: DatasetS
         {source === 'api' ? '● Live data from backend API' : '○ Bundled sample data (backend not connected)'}
       </div>
 
-      <StatusStrip result={result} />
+      {tab !== 'configuration' && <StatusStrip result={result} />}
 
-      {tab === 'timeline' ? (
+      {tab === 'timeline' && (
         <>
           <div className="panel">
             <Timeline scope={scope} result={result} today={scenario.today} />
@@ -138,8 +159,18 @@ function Planner({ dataset, source }: { dataset: DomainDataset; source: DatasetS
             />
           </div>
         </>
-      ) : (
-        <DependencyGraph scope={scope} scenario={scenario} />
+      )}
+
+      {tab === 'dependencies' && <DependencyGraph scope={scope} scenario={scenario} />}
+
+      {tab === 'configuration' && (
+        <Configuration
+          dataset={dataset}
+          teamId={scope.team.id}
+          epicKey={epicKey}
+          editable={source === 'api'}
+          onReload={onReload}
+        />
       )}
     </div>
   );
