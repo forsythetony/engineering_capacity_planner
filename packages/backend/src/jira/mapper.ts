@@ -69,6 +69,13 @@ function labelsOf(fields: JiraIssueFields, mapping: JiraMapping): string[] {
 const assigneeOf = (fields: JiraIssueFields): JiraUser | null =>
   (fields.assignee as JiraUser | null | undefined) ?? null;
 
+/** Pick a reasonably-sized avatar URL from Jira's size-keyed map, or null. */
+export function pickAvatarUrl(user: Pick<JiraUser, 'avatarUrls'> | null | undefined): string | null {
+  const urls = user?.avatarUrls;
+  if (!urls) return null;
+  return urls['48x48'] ?? urls['32x32'] ?? Object.values(urls)[0] ?? null;
+}
+
 /**
  * Translate a bundle of raw Jira issues + sprints into a self-consistent
  * {@link DomainDataset} of *facts* (Jira owns these). Local *intent* — PTO,
@@ -140,6 +147,7 @@ export function datasetFromJira(input: JiraDatasetInput): DomainDataset {
         baseVelocity: DEFAULT_BASE_VELOCITY,
         active: assignee.active ?? true,
         jiraAccountId: assignee.accountId,
+        avatarUrl: pickAvatarUrl(assignee),
       });
     }
 

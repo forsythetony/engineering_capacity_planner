@@ -279,7 +279,7 @@ function MemberRow({ member, color, disabled, run }: { member: TeamMember; color
   const dirty = Number(velocity) !== member.baseVelocity;
   return (
     <div className={`config-row${member.active ? '' : ' inactive'}`} data-testid={`cfg-member-${member.id}`}>
-      <MemberAvatar name={member.name} color={color} size={22} />
+      <MemberAvatar name={member.name} color={color} size={22} avatarUrl={member.avatarUrl} />
       <span className="config-primary">{member.name}</span>
       <label className="inline-check">
         <input type="checkbox" checked={member.active} disabled={disabled}

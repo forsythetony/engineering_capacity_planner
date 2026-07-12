@@ -399,6 +399,14 @@ button.tab:hover:not(.active) {
   line-height: 1;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
 }
 
 /* --- Availability: subtabs, calendar, list, modal --- */
@@ -1513,6 +1521,8 @@ button.tab:hover:not(.active) {
   cursor: pointer;
 }
 .typeahead-option:hover { background: color-mix(in srgb, var(--accent) 18%, var(--panel-2)); }
+.typeahead-main { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.typeahead-avatar { border-radius: 50%; object-fit: cover; flex: none; }
 .typeahead-label { font-weight: 500; }
 .typeahead-hint { font-size: 11px; color: var(--muted); font-family: ui-monospace, monospace; }
 

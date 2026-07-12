@@ -89,6 +89,7 @@ export interface JiraUserOption {
   accountId: string;
   displayName: string;
   email: string | null;
+  avatarUrl: string | null;
 }
 
 const qs = (params: Record<string, string | undefined>): string => {
@@ -126,11 +127,13 @@ export const createMember = (input: {
   active?: boolean;
   /** Jira accountId to link this member to (from the people picker). */
   jiraAccountId?: string | null;
+  /** Jira avatar image URL to show in the avatar chip. */
+  avatarUrl?: string | null;
 }): Promise<TeamMember> => request('POST', '/api/members', input);
 
 export const updateMember = (
   id: string,
-  patch: Partial<Pick<TeamMember, 'name' | 'baseVelocity' | 'active' | 'jiraAccountId'>>,
+  patch: Partial<Pick<TeamMember, 'name' | 'baseVelocity' | 'active' | 'jiraAccountId' | 'avatarUrl'>>,
 ): Promise<TeamMember> => request('PUT', `/api/members/${encodeURIComponent(id)}`, patch);
 
 export const deleteMember = (id: string): Promise<void> =>

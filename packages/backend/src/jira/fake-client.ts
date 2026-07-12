@@ -59,6 +59,37 @@ function project(fields: JiraIssueFields, requested: string[] | undefined): Jira
   return out;
 }
 
+const AVATAR_COLORS = ['5b8cff', '2fb673', 'e0a63a', 'e05a5a', 'a56bff', '3ec6c6'];
+
+/**
+ * A self-contained (no-network) SVG data-URI avatar, so the demo board shows
+ * real-looking avatar images offline. Real Jira supplies actual `avatarUrls`;
+ * this only fills the gap for the in-memory fake.
+ */
+function demoAvatarDataUri(seed: string, label: string): string {
+  let h = 0;
+  for (const c of seed) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  const color = AVATAR_COLORS[h % AVATAR_COLORS.length];
+  const initials = label
+    .split(/\s+/)
+    .map((w) => w[0] ?? '')
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48">` +
+    `<circle cx="24" cy="24" r="24" fill="#${color}"/>` +
+    `<text x="24" y="31" font-family="sans-serif" font-size="20" fill="#fff" text-anchor="middle">${initials}</text>` +
+    `</svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
+/** Give a user demo avatar URLs if they don't already carry any. */
+function withDemoAvatar(u: JiraUser): JiraUser {
+  if (u.avatarUrls) return u;
+  return { ...u, avatarUrls: { '48x48': demoAvatarDataUri(u.accountId, u.displayName) } };
+}
+
 /** The authenticated user reported by the fake's `getCurrentUser()`. */
 export const DEFAULT_CURRENT_USER: JiraUser = {
   accountId: 'acc-self',
@@ -125,7 +156,7 @@ export class FakeJiraClient implements JiraClient {
 
   // --- Read ----------------------------------------------------------------
   async getCurrentUser(): Promise<JiraUser> {
-    return { ...this.currentUser };
+    return withDemoAvatar({ ...this.currentUser });
   }
 
   /** Assignees on stored issues + any injected directory users, deduped. */
@@ -143,7 +174,7 @@ export class FakeJiraClient implements JiraClient {
     const q = query.trim().toLowerCase();
     return this.knownUsers()
       .filter((u) => q === '' || u.displayName.toLowerCase().includes(q))
-      .map((u) => ({ ...u }));
+      .map((u) => withDemoAvatar({ ...u }));
   }
 
   async listFields(): Promise<JiraField[]> {
@@ -242,6 +273,9 @@ export class FakeJiraClient implements JiraClient {
       issuelinks: [],
     };
     delete (fields as Record<string, unknown>).project;
+    // Give the assignee a demo avatar so synced work items carry one offline.
+    const assignee = fields.assignee as JiraUser | null | undefined;
+    if (assignee?.accountId) fields.assignee = withDemoAvatar(assignee);
 
     this.issues.set(key, { id, key, fields });
     return { id, key, self: `https://fake.atlassian.net/rest/api/3/issue/${id}` };

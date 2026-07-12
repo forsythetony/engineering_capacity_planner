@@ -290,13 +290,13 @@ function MembersStep({ teamId, members, disabled, run, onReload }: {
               r.users
                 // Hide people already linked to a member.
                 .filter((u) => !members.some((m) => m.jiraAccountId === u.accountId))
-                .map((u) => ({ id: u.accountId, label: u.displayName, hint: u.email ?? undefined })),
+                .map((u) => ({ id: u.accountId, label: u.displayName, hint: u.email ?? undefined, imageUrl: u.avatarUrl })),
           )
           }
           onSelect={(opt) => {
             setAddText('');
             run(async () => {
-              await api.createMember({ teamId, name: opt.label, baseVelocity: 10, jiraAccountId: opt.id });
+              await api.createMember({ teamId, name: opt.label, baseVelocity: 10, jiraAccountId: opt.id, avatarUrl: opt.imageUrl ?? null });
               await onReload();
             });
           }}
@@ -320,7 +320,7 @@ function MemberLinkRow({ member, color, disabled, run, onReload }: {
   const [linking, setLinking] = useState(false);
   return (
     <div className="config-row" data-testid={`wizard-member-${member.id}`}>
-      <MemberAvatar name={member.name} color={color} size={22} />
+      <MemberAvatar name={member.name} color={color} size={22} avatarUrl={member.avatarUrl} />
       <span className="config-primary">{member.name}</span>
       {member.jiraAccountId ? (
         <>
@@ -339,11 +339,11 @@ function MemberLinkRow({ member, color, disabled, run, onReload }: {
             searchOnEmpty
             placeholder="Find Jira user…"
             testId={`wizard-member-link-${member.id}`}
-            search={(q) => api.searchJiraUsers(q).then((r) => r.users.map((u) => ({ id: u.accountId, label: u.displayName, hint: u.email ?? undefined })))}
+            search={(q) => api.searchJiraUsers(q).then((r) => r.users.map((u) => ({ id: u.accountId, label: u.displayName, hint: u.email ?? undefined, imageUrl: u.avatarUrl })))}
             onSelect={(opt) => {
               setLinking(false);
               setLinkText('');
-              run(async () => { await api.updateMember(member.id, { jiraAccountId: opt.id }); await onReload(); });
+              run(async () => { await api.updateMember(member.id, { jiraAccountId: opt.id, avatarUrl: opt.imageUrl ?? null }); await onReload(); });
             }}
           />
           <button type="button" className="link-btn" onClick={() => setLinking(false)}>cancel</button>

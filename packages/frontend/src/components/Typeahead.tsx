@@ -7,6 +7,8 @@ export interface TypeaheadOption {
   label: string;
   /** Optional dimmed secondary text (e.g. a key or email). */
   hint?: string;
+  /** Optional leading avatar image URL (e.g. a Jira user). */
+  imageUrl?: string | null;
 }
 
 interface TypeaheadProps<T extends TypeaheadOption> {
@@ -123,7 +125,10 @@ export function Typeahead<T extends TypeaheadOption>({
               data-testid="typeahead-option"
               onClick={() => choose(opt)}
             >
-              <span className="typeahead-label">{opt.label}</span>
+              <span className="typeahead-main">
+                {opt.imageUrl && <img className="typeahead-avatar" src={opt.imageUrl} alt="" width={20} height={20} />}
+                <span className="typeahead-label">{opt.label}</span>
+              </span>
               {opt.hint && <span className="typeahead-hint">{opt.hint}</span>}
             </button>
           ))}

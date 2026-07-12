@@ -183,7 +183,7 @@ export function GanttBoard({ scope, source }: { scope: EpicScope; source: Datase
               onClick={() => setOpenMemberId(mc.member.id)}
               title={`${mc.member.name} — ${mc.total} pts this sprint`}
             >
-              <MemberAvatar name={mc.member.name} color={colorFor(colors, mc.member.id)} size={26} />
+              <MemberAvatar name={mc.member.name} color={colorFor(colors, mc.member.id)} size={26} avatarUrl={mc.member.avatarUrl} />
             </button>
           ))}
         </div>

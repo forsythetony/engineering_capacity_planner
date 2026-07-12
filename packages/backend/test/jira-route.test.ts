@@ -129,8 +129,10 @@ describe('Jira setup wizard endpoints', () => {
     expect(names).toEqual(['Ada Lovelace', 'Grace Hopper']);
 
     const filtered = await app.inject({ method: 'GET', url: '/api/jira/users?q=grace' });
-    expect(filtered.json().users).toEqual([
-      { accountId: 'acc-grace', displayName: 'Grace Hopper', email: 'grace@example.com' },
-    ]);
+    const users = filtered.json().users;
+    expect(users).toHaveLength(1);
+    expect(users[0]).toMatchObject({ accountId: 'acc-grace', displayName: 'Grace Hopper', email: 'grace@example.com' });
+    // The fake fills in a self-contained data-URI avatar for demo realism.
+    expect(users[0].avatarUrl).toMatch(/^data:image\/svg/);
   });
 });

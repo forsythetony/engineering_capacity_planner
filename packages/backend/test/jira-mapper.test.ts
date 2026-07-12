@@ -60,7 +60,7 @@ describe('datasetFromJira', () => {
       labels: ['Cart'],
     });
     expect(ds.members).toEqual([
-      { id: 'acc-1', teamId: 'team-jira-ckt', name: 'Ada', baseVelocity: 10, active: true, jiraAccountId: 'acc-1' },
+      { id: 'acc-1', teamId: 'team-jira-ckt', name: 'Ada', baseVelocity: 10, active: true, jiraAccountId: 'acc-1', avatarUrl: null },
     ]);
   });
 

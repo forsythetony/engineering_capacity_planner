@@ -60,5 +60,10 @@ test.describe('Jira setup wizard & nav sync', () => {
     await expect(sync).not.toHaveAttribute('data-state', 'locked');
     await sync.click();
     await expect(page.getByTestId('nav-sync-msg')).toContainText(/Synced \d+ items/);
+
+    // Synced members carry their Jira avatar image (the demo board supplies a
+    // self-contained data-URI avatar).
+    await page.getByTestId('wizard-step-members').click();
+    await expect(page.getByTestId('wizard-members').locator('.avatar-img').first()).toBeVisible();
   });
 });

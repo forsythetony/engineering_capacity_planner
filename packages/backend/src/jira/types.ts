@@ -44,6 +44,8 @@ export interface JiraUser {
   active?: boolean;
   /** Present on `/myself` and (when visible) user search; absent otherwise. */
   emailAddress?: string;
+  /** Avatar image URLs keyed by size, e.g. `{ "48x48": "https://…" }`. */
+  avatarUrls?: Record<string, string>;
 }
 
 export interface JiraIssueRef {

@@ -14,6 +14,7 @@ import { readDataset } from '../db/persist.js';
 import { HttpError } from '../http-error.js';
 import { buildJiraClient } from '../importer/factory.js';
 import type { JiraClient } from '../jira/client.js';
+import { pickAvatarUrl } from '../jira/mapper.js';
 
 /** Read a global string setting (JSON-decoded), or null. */
 function settingStr(settings: Setting[], key: string): string | null {
@@ -191,6 +192,7 @@ export function registerJiraRoutes(
           accountId: u.accountId,
           displayName: u.displayName,
           email: u.emailAddress ?? null,
+          avatarUrl: pickAvatarUrl(u),
         })),
       };
     } catch (err) {

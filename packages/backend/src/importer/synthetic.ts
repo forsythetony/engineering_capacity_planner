@@ -193,6 +193,7 @@ export function generateSyntheticDataset(config: SyntheticConfig = {}): DomainDa
       active: i !== memberCount - 1,
       // Synthetic members are purely local (not linked to a Jira account).
       jiraAccountId: null,
+      avatarUrl: null,
     });
   }
   const activeMembers = members.filter((m) => m.active);

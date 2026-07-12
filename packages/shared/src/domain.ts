@@ -58,6 +58,11 @@ export interface TeamMember {
    * their own `accountId` here.
    */
   jiraAccountId?: string | null;
+  /**
+   * URL of the member's Jira avatar image, or `null` when unlinked / unknown.
+   * The UI renders it in the avatar chip, falling back to initials-on-color.
+   */
+  avatarUrl?: string | null;
 }
 
 /**

@@ -27,7 +27,9 @@ CREATE TABLE IF NOT EXISTS team_member (
   active        INTEGER NOT NULL DEFAULT 1,
   -- Jira accountId this member is linked to (NULL for a purely local member).
   -- Lets a synced assignee map back onto a hand-created person (project plan §7).
-  jira_account_id TEXT
+  jira_account_id TEXT,
+  -- URL of the member's Jira avatar image (NULL when unlinked/unknown).
+  avatar_url TEXT
 );
 
 CREATE TABLE IF NOT EXISTS velocity_override (

@@ -80,6 +80,7 @@ export function reconcileDataset(current: DomainDataset, incoming: DomainDataset
     const local = byAccount.get(account) ?? mergedMembers.find((m) => m.id === account);
     if (local) {
       local.name = inc.name;
+      if (inc.avatarUrl) local.avatarUrl = inc.avatarUrl; // refresh from Jira
       if (!local.jiraAccountId) local.jiraAccountId = account; // backfill the link
       accountToMemberId.set(account, local.id);
     } else {
