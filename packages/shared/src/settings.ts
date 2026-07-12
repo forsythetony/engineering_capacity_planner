@@ -37,6 +37,8 @@ export const SETTING_KEYS = {
   JIRA_EPIC_KEY: 'jira_epic_key',
   /** Agile board id used to read sprints; blank = auto-discover the project's board. */
   JIRA_BOARD_ID: 'jira_board_id',
+  /** Human-readable name of the selected board, for display in the setup wizard. */
+  JIRA_BOARD_NAME: 'jira_board_name',
   /** Custom field id carrying the sprint, e.g. `"customfield_10020"`. */
   JIRA_SPRINT_FIELD: 'jira_sprint_field',
   /** Field id carrying the labels that feed Gantt lanes (default the native `labels`). */
@@ -88,6 +90,7 @@ export function defaultGlobalSettings(): Setting[] {
     global(SETTING_KEYS.JIRA_BLOCKS_LINK_TYPE, null),
     global(SETTING_KEYS.JIRA_EPIC_KEY, null),
     global(SETTING_KEYS.JIRA_BOARD_ID, null),
+    global(SETTING_KEYS.JIRA_BOARD_NAME, null),
     global(SETTING_KEYS.JIRA_SPRINT_FIELD, null),
     global(SETTING_KEYS.JIRA_LABELS_FIELD, null),
     global(SETTING_KEYS.LAST_SYNCED_AT, null),

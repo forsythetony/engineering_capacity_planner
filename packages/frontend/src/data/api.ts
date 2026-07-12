@@ -50,6 +50,8 @@ export interface JiraSampleResponse {
 export interface SyncResponse {
   source: string;
   summary: Record<string, number>;
+  /** ISO datetime of this sync. */
+  syncedAt?: string;
 }
 
 /** Fetch the field catalog + a sample issue so the user can map fields live. */
@@ -64,6 +66,54 @@ export const getJiraSample = (params: { project?: string; epic?: string } = {}):
 /** Re-import from Jira and reconcile onto local state. */
 export const syncNow = (): Promise<SyncResponse> => request('POST', '/api/sync');
 
+// --- Jira setup wizard (project plan §7) -----------------------------------
+export interface JiraConnection {
+  connected: boolean;
+  baseUrl: string | null;
+  displayName?: string;
+  email?: string | null;
+  accountId?: string;
+  error?: string;
+}
+export interface JiraBoardOption {
+  id: number;
+  name: string;
+  type: string;
+  projectKey: string | null;
+}
+export interface JiraEpicOption {
+  key: string;
+  summary: string;
+}
+export interface JiraUserOption {
+  accountId: string;
+  displayName: string;
+  email: string | null;
+}
+
+const qs = (params: Record<string, string | undefined>): string => {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v && v.trim() !== '') q.set(k, v.trim());
+  }
+  const s = q.toString();
+  return s ? `?${s}` : '';
+};
+
+/** Connection status for the wizard's Connect step (never returns the token). */
+export const getJiraConnection = (): Promise<JiraConnection> => request('GET', '/api/jira/connection');
+
+export const searchJiraBoards = (q?: string): Promise<{ boards: JiraBoardOption[] }> =>
+  request('GET', `/api/jira/boards${qs({ q })}`);
+
+export const searchJiraEpics = (params: { project?: string; q?: string } = {}): Promise<{
+  projectKey: string;
+  epics: JiraEpicOption[];
+}> => request('GET', `/api/jira/epics${qs({ project: params.project, q: params.q })}`);
+
+export const searchJiraUsers = (q?: string): Promise<{ users: JiraUserOption[] }> =>
+  request('GET', `/api/jira/users${qs({ q })}`);
+
 // --- Team cadence ----------------------------------------------------------
 export const updateTeam = (id: string, patch: Partial<Omit<Team, 'id'>>): Promise<Team> =>
   request('PUT', `/api/teams/${encodeURIComponent(id)}`, patch);
@@ -74,11 +124,13 @@ export const createMember = (input: {
   name: string;
   baseVelocity: number;
   active?: boolean;
+  /** Jira accountId to link this member to (from the people picker). */
+  jiraAccountId?: string | null;
 }): Promise<TeamMember> => request('POST', '/api/members', input);
 
 export const updateMember = (
   id: string,
-  patch: Partial<Pick<TeamMember, 'name' | 'baseVelocity' | 'active'>>,
+  patch: Partial<Pick<TeamMember, 'name' | 'baseVelocity' | 'active' | 'jiraAccountId'>>,
 ): Promise<TeamMember> => request('PUT', `/api/members/${encodeURIComponent(id)}`, patch);
 
 export const deleteMember = (id: string): Promise<void> =>

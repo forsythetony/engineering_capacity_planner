@@ -9,6 +9,7 @@ import { AvailabilityCalendar } from './AvailabilityCalendar';
 import { AvailabilityList } from './AvailabilityList';
 import { AddAvailabilityModal, type NewAvailability } from './AddAvailabilityModal';
 import { MemberAvatar } from './MemberAvatar';
+import { JiraSetupWizard } from './JiraSetupWizard';
 
 interface ConfigurationProps {
   dataset: DomainDataset;
@@ -89,7 +90,14 @@ export function Configuration({ dataset, teamId, epicKey, editable, onReload }: 
         onReload={onReload}
       />
       <MilestonesSection dataset={dataset} epicKey={epicKey} disabled={disabled} run={run} />
-      <JiraSection dataset={dataset} disabled={disabled} run={run} />
+      <JiraSetupWizard
+        dataset={dataset}
+        teamId={teamId}
+        members={members}
+        disabled={disabled}
+        run={run}
+        onReload={onReload}
+      />
     </div>
   );
 }
@@ -416,173 +424,6 @@ function MilestonesSection({ dataset, epicKey, disabled, run }: {
           })}>
           Add relevant day
         </button>
-      </div>
-    </section>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Jira mapping + sync (project plan §7): connection settings, a live field
-// picker (point at your board's fields instead of typing customfield ids), and
-// the Sync button that pulls Jira facts in while preserving local intent.
-// ---------------------------------------------------------------------------
-const FIELD_ROLES = [
-  { setting: SETTING_KEYS.JIRA_STORY_POINTS_FIELD, label: 'Story points' },
-  { setting: SETTING_KEYS.JIRA_SPRINT_FIELD, label: 'Sprint' },
-  { setting: SETTING_KEYS.JIRA_LABELS_FIELD, label: 'Labels' },
-] as const;
-
-function preview(value: unknown): string {
-  if (value == null) return '—';
-  const s = typeof value === 'string' ? value : JSON.stringify(value);
-  return s.length > 64 ? `${s.slice(0, 61)}…` : s;
-}
-
-/**
- * One row per catalog field (custom fields first), carrying the sample issue's
- * value when present — so any field is mappable even if this particular issue
- * left it blank.
- */
-function fieldRows(sample: api.JiraSampleResponse): Array<{ id: string; name: string; value: unknown }> {
-  const fields = sample.fields ?? {};
-  return [...sample.catalog]
-    .sort((a, b) => Number(b.custom) - Number(a.custom) || a.name.localeCompare(b.name))
-    .map((c) => ({ id: c.id, name: c.name, value: fields[c.id] ?? null }));
-}
-
-function JiraSection({ dataset, disabled, run }: { dataset: DomainDataset; disabled: boolean; run: Run }) {
-  const cur = (key: string) => settingValue<string | null>(dataset, key, null) ?? '';
-  const [flavor, setFlavor] = useState(cur(SETTING_KEYS.JIRA_FLAVOR));
-  const [project, setProject] = useState(cur(SETTING_KEYS.JIRA_PROJECT_KEY));
-  const [epic, setEpic] = useState(cur(SETTING_KEYS.JIRA_EPIC_KEY));
-  const nullify = (s: string) => (s.trim() === '' ? null : s.trim());
-
-  // Persisted mappings (read live from the dataset so "Use as" reflects at once).
-  const pointsField = cur(SETTING_KEYS.JIRA_STORY_POINTS_FIELD);
-  const sprintField = cur(SETTING_KEYS.JIRA_SPRINT_FIELD);
-  const labelsField = cur(SETTING_KEYS.JIRA_LABELS_FIELD);
-  const linkType = cur(SETTING_KEYS.JIRA_BLOCKS_LINK_TYPE);
-  const mappedTo = (id: string): string[] =>
-    FIELD_ROLES.filter((r) => cur(r.setting) === id).map((r) => r.label);
-
-  const [sample, setSample] = useState<api.JiraSampleResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [sampleError, setSampleError] = useState<string | null>(null);
-  const [syncMsg, setSyncMsg] = useState<string | null>(null);
-
-  const loadSample = async () => {
-    setLoading(true);
-    setSampleError(null);
-    try {
-      setSample(await api.getJiraSample({ project: project.trim(), epic: epic.trim() }));
-    } catch (e) {
-      setSample(null);
-      setSampleError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const sync = () =>
-    run(async () => {
-      const res = await api.syncNow();
-      const s = res.summary;
-      setSyncMsg(
-        `Synced ${s.workItems} items across ${s.sprints} sprints` +
-          (s.placementsPulledDone ? ` · pulled ${s.placementsPulledDone} completed` : '') +
-          (s.membersAdded ? ` · +${s.membersAdded} members` : ''),
-      );
-    });
-
-  return (
-    <section className="panel" data-testid="cfg-jira">
-      <SectionTitle title="Jira mapping & sync" hint="Point at your board's fields, then Sync to pull facts in (intent stays local)." />
-
-      <div className="controls">
-        <Field label="Flavor">
-          <select value={flavor} disabled={disabled} onChange={(e) => setFlavor(e.target.value)}>
-            <option value="">(unset)</option>
-            <option value="cloud">Cloud</option>
-            <option value="server">Server / Data Center</option>
-          </select>
-        </Field>
-        <Field label="Project key">
-          <input type="text" value={project} disabled={disabled} placeholder="e.g. CKT" onChange={(e) => setProject(e.target.value)} />
-        </Field>
-        <Field label="Epic key" help="The epic to import work from.">
-          <input type="text" value={epic} disabled={disabled} placeholder="e.g. CKT-1" onChange={(e) => setEpic(e.target.value)} />
-        </Field>
-        <button type="button" className="btn" disabled={disabled} data-testid="cfg-jira-save"
-          onClick={() => run(() => api.patchSettings({
-            [SETTING_KEYS.JIRA_FLAVOR]: nullify(flavor),
-            [SETTING_KEYS.JIRA_PROJECT_KEY]: nullify(project),
-            [SETTING_KEYS.JIRA_EPIC_KEY]: nullify(epic),
-          }))}>
-          Save connection
-        </button>
-        <button type="button" className="btn" disabled={disabled || loading} data-testid="cfg-jira-load-sample" onClick={loadSample}>
-          {loading ? 'Loading…' : 'Load sample from Jira'}
-        </button>
-      </div>
-
-      {sampleError && <div className="config-error" data-testid="cfg-jira-sample-error">⚠ {sampleError}</div>}
-
-      {sample && (
-        <div className="jira-mapper" data-testid="cfg-jira-sample">
-          <p className="hint">
-            {sample.sampleKey
-              ? <>Sample issue <strong>{sample.sampleKey}</strong> — click a field to map it.</>
-              : <>No issues found in <strong>{sample.projectKey}</strong> to sample; the field catalog is still shown below.</>}
-          </p>
-          <div className="jira-field-list">
-            {fieldRows(sample).map(({ id, name, value }) => {
-              const roles = mappedTo(id);
-              return (
-                <div className="jira-field-row" data-testid="cfg-jira-field-row" key={id}>
-                  <div className="jira-field-meta">
-                    <span className="jira-field-name">{name}</span>
-                    <code className="jira-field-id">{id}</code>
-                    {roles.length > 0 && <span className="jira-field-badge">{roles.join(', ')}</span>}
-                  </div>
-                  <span className="jira-field-value">{preview(value)}</span>
-                  <div className="jira-field-actions">
-                    {FIELD_ROLES.map((r) => (
-                      <button key={r.setting} type="button" className="btn btn-tiny" disabled={disabled}
-                        data-testid={`cfg-jira-use-${r.label.toLowerCase().replace(' ', '-')}`}
-                        onClick={() => run(() => api.patchSettings({ [r.setting]: id }))}>
-                        {cur(r.setting) === id ? `✓ ${r.label}` : `Use as ${r.label}`}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="controls">
-            <Field label="'Blocks' link type">
-              <select value={linkType} disabled={disabled}
-                onChange={(e) => run(() => api.patchSettings({ [SETTING_KEYS.JIRA_BLOCKS_LINK_TYPE]: nullify(e.target.value) }))}>
-                <option value="">(unset)</option>
-                {sample.linkTypes.map((t) => (
-                  <option key={t.id} value={t.name}>{t.name} ({t.outward})</option>
-                ))}
-              </select>
-            </Field>
-          </div>
-        </div>
-      )}
-
-      <div className="jira-mapping-summary hint" data-testid="cfg-jira-summary">
-        Mapped — points: <code>{pointsField || '—'}</code>, sprint: <code>{sprintField || '—'}</code>,
-        labels: <code>{labelsField || 'labels'}</code>, blocks: <code>{linkType || '—'}</code>
-      </div>
-
-      <div className="controls">
-        <button type="button" className="btn primary" disabled={disabled} data-testid="cfg-jira-sync" onClick={sync}>
-          Sync from Jira
-        </button>
-        {syncMsg && <span className="hint" data-testid="cfg-jira-sync-msg">{syncMsg}</span>}
       </div>
     </section>
   );

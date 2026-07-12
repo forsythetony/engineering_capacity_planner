@@ -5,6 +5,7 @@ import { DependencyGraph } from './components/DependencyGraph';
 import { GanttBoard } from './components/GanttBoard';
 import { JiraLink } from './components/JiraLink';
 import { StatusStrip } from './components/StatusStrip';
+import { SyncButton } from './components/SyncButton';
 import { Timeline } from './components/Timeline';
 import { WorkItemList } from './components/WorkItemList';
 import { loadDataset, type DatasetSource } from './data/loadDataset';
@@ -103,40 +104,48 @@ function Planner({
             {scope.team.name}
           </div>
         </div>
-        <nav className="tabs">
-          <button
-            type="button"
-            className={`tab${tab === 'timeline' ? ' active' : ''}`}
-            data-testid="tab-timeline"
-            onClick={() => setTab('timeline')}
-          >
-            Timeline
-          </button>
-          <button
-            type="button"
-            className={`tab${tab === 'dependencies' ? ' active' : ''}`}
-            data-testid="tab-dependencies"
-            onClick={() => setTab('dependencies')}
-          >
-            Dependencies
-          </button>
-          <button
-            type="button"
-            className={`tab${tab === 'gantt' ? ' active' : ''}`}
-            data-testid="tab-gantt"
-            onClick={() => setTab('gantt')}
-          >
-            Gantt Planner
-          </button>
-          <button
-            type="button"
-            className={`tab${tab === 'configuration' ? ' active' : ''}`}
-            data-testid="tab-configuration"
-            onClick={() => setTab('configuration')}
-          >
-            Configuration
-          </button>
-        </nav>
+        <div className="header-actions">
+          <nav className="tabs">
+            <button
+              type="button"
+              className={`tab${tab === 'timeline' ? ' active' : ''}`}
+              data-testid="tab-timeline"
+              onClick={() => setTab('timeline')}
+            >
+              Timeline
+            </button>
+            <button
+              type="button"
+              className={`tab${tab === 'dependencies' ? ' active' : ''}`}
+              data-testid="tab-dependencies"
+              onClick={() => setTab('dependencies')}
+            >
+              Dependencies
+            </button>
+            <button
+              type="button"
+              className={`tab${tab === 'gantt' ? ' active' : ''}`}
+              data-testid="tab-gantt"
+              onClick={() => setTab('gantt')}
+            >
+              Gantt Planner
+            </button>
+            <button
+              type="button"
+              className={`tab${tab === 'configuration' ? ' active' : ''}`}
+              data-testid="tab-configuration"
+              onClick={() => setTab('configuration')}
+            >
+              Configuration
+            </button>
+          </nav>
+          <SyncButton
+            dataset={dataset}
+            source={source}
+            onReload={onReload}
+            onGoToSetup={() => setTab('configuration')}
+          />
+        </div>
       </header>
 
       <div className="source-note" data-testid="data-source" data-source={source}>
