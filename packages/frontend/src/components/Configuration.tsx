@@ -102,6 +102,9 @@ type Run = (fn: () => Promise<unknown>) => Promise<void>;
 function KnobsSection({ dataset, disabled, run }: { dataset: DomainDataset; disabled: boolean; run: Run }) {
   const [oncall, setOncall] = useState(String(settingValue(dataset, SETTING_KEYS.ONCALL_MULTIPLIER, 0.5)));
   const [green, setGreen] = useState(String(settingValue(dataset, SETTING_KEYS.GREEN_MIN_BUFFER_DAYS, 5)));
+  const [weekYellow, setWeekYellow] = useState(
+    String(settingValue(dataset, SETTING_KEYS.WEEK_YELLOW_LOAD_FRACTION, 1)),
+  );
 
   return (
     <section className="panel">
@@ -149,10 +152,18 @@ function KnobsSection({ dataset, disabled, run }: { dataset: DomainDataset; disa
           <input type="number" min={0} max={60} value={green} disabled={disabled}
             data-testid="cfg-green" onChange={(e) => setGreen(e.target.value)} />
         </Field>
+        <Field
+          label="Gantt week yellow at (% of capacity)"
+          help="On the Gantt Planner, a week turns yellow once its planned load reaches this fraction of capacity, and red once it's over. 1 = yellow only when fully loaded; lower (e.g. 0.9) warns before a week is completely full."
+        >
+          <input type="number" min={0} max={1} step={0.05} value={weekYellow} disabled={disabled}
+            data-testid="cfg-week-yellow" onChange={(e) => setWeekYellow(e.target.value)} />
+        </Field>
         <button type="button" className="btn" disabled={disabled} data-testid="cfg-knobs-save"
           onClick={() => run(() => api.patchSettings({
             [SETTING_KEYS.ONCALL_MULTIPLIER]: Number(oncall),
             [SETTING_KEYS.GREEN_MIN_BUFFER_DAYS]: Number(green),
+            [SETTING_KEYS.WEEK_YELLOW_LOAD_FRACTION]: Number(weekYellow),
           }))}>
           Save knobs
         </button>

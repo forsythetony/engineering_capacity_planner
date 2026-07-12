@@ -119,6 +119,8 @@ test.describe('Configuration tab', () => {
     await expect(page.getByTestId('config-readonly')).toBeVisible();
     await expect(page.getByTestId('cfg-knobs-save')).toBeDisabled();
     await expect(page.getByTestId('cfg-oncall-mult')).toBeDisabled();
+    // The Gantt week-yellow knob lives here too.
+    await expect(page.getByTestId('cfg-week-yellow')).toBeDisabled();
 
     // The gating relevant day is flagged in the list.
     await expect(page.locator('.config-row.gating')).toHaveCount(1);

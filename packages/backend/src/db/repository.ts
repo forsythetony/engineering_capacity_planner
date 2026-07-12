@@ -46,13 +46,20 @@ function assertNonEmptyString(value: unknown, field: string): string {
   return value;
 }
 
-function assertNumber(value: unknown, field: string, opts: { min?: number; int?: boolean } = {}): number {
+function assertNumber(
+  value: unknown,
+  field: string,
+  opts: { min?: number; max?: number; int?: boolean } = {},
+): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     throw badRequest(`${field} must be a finite number`);
   }
   if (opts.int && !Number.isInteger(value)) throw badRequest(`${field} must be an integer`);
   if (opts.min !== undefined && value < opts.min) {
     throw badRequest(`${field} must be ≥ ${opts.min}`);
+  }
+  if (opts.max !== undefined && value > opts.max) {
+    throw badRequest(`${field} must be ≤ ${opts.max}`);
   }
   return value;
 }
@@ -160,6 +167,7 @@ function requireEpic(db: Db, key: string): void {
 const EDITABLE_SETTINGS: Record<string, (value: unknown, key: string) => unknown> = {
   [SETTING_KEYS.ONCALL_MULTIPLIER]: (v, k) => assertNumber(v, k, { min: 0 }),
   [SETTING_KEYS.GREEN_MIN_BUFFER_DAYS]: (v, k) => assertNumber(v, k, { min: 0, int: true }),
+  [SETTING_KEYS.WEEK_YELLOW_LOAD_FRACTION]: (v, k) => assertNumber(v, k, { min: 0, max: 1 }),
   [SETTING_KEYS.PLANNING_TODAY]: (v, k) => (v === null ? null : assertIsoDate(v, k)),
   [SETTING_KEYS.JIRA_FLAVOR]: nullableString,
   [SETTING_KEYS.JIRA_STORY_POINTS_FIELD]: nullableString,

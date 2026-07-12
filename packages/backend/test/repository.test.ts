@@ -39,6 +39,13 @@ describe('settings', () => {
     expect(JSON.parse(settings.find((s) => s.key === SETTING_KEYS.JIRA_PROJECT_KEY)!.value)).toBe('CKT');
   });
 
+  it('accepts the Gantt week-yellow fraction within 0–1 and rejects out of range', () => {
+    const settings = repo.upsertGlobalSettings(db, { [SETTING_KEYS.WEEK_YELLOW_LOAD_FRACTION]: 0.9 });
+    expect(JSON.parse(settings.find((s) => s.key === SETTING_KEYS.WEEK_YELLOW_LOAD_FRACTION)!.value)).toBe(0.9);
+    expectHttp(() => repo.upsertGlobalSettings(db, { [SETTING_KEYS.WEEK_YELLOW_LOAD_FRACTION]: 1.5 }), 400);
+    expectHttp(() => repo.upsertGlobalSettings(db, { [SETTING_KEYS.WEEK_YELLOW_LOAD_FRACTION]: -0.1 }), 400);
+  });
+
   it('rejects unknown keys and bad value types', () => {
     expectHttp(() => repo.upsertGlobalSettings(db, { not_a_setting: 1 }), 400);
     expectHttp(() => repo.upsertGlobalSettings(db, { [SETTING_KEYS.ONCALL_MULTIPLIER]: 'x' }), 400);
