@@ -174,7 +174,7 @@ function Planner({
 
       {tab === 'dependencies' && <DependencyGraph scope={scope} scenario={scenario} />}
 
-      {tab === 'gantt' && <GanttBoard scope={scope} />}
+      {tab === 'gantt' && <GanttBoard scope={scope} source={source} />}
 
       {tab === 'configuration' && (
         <Configuration

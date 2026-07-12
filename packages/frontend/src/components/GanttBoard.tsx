@@ -1,25 +1,69 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import type { PlannedPlacement, WorkItem } from '@ecp/shared';
+import * as api from '../data/api';
+import type { DatasetSource } from '../data/loadDataset';
 import { colorFor, memberColorMap } from '../lib/memberColors';
 import { formatDayShort } from '../lib/format';
-import { buildGanttView, ganttCell, type MemberWeekCapacity } from '../lib/gantt';
+import { buildGanttView, ganttCell, type GanttView, type MemberWeekCapacity } from '../lib/gantt';
 import type { EpicScope } from '../lib/projection';
 import { MemberAvatar } from './MemberAvatar';
 
 /** DOM-safe slug for test ids and keys. */
 const slug = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
+/** The key a drag carries. */
+const DND_KEY = 'text/plain';
+
 /**
- * The Gantt Planner tab (project plan §6a) — read-only for now. It zooms into a
- * sprint and breaks it out week by week: each week column carries a
- * green/yellow/red capacity verdict, the rows are epic subdivisions (from
- * labels), and the engineer strip opens a per-person weekly-capacity breakdown.
- * Dragging work in from the bag lands in the next slice.
+ * The Gantt Planner tab (project plan §6a). Zooms into a sprint and breaks it
+ * out week by week: each week column carries a green/yellow/red capacity
+ * verdict, rows are epic subdivisions (from labels), and you drag work out of
+ * the backlog "bag" into a week — the week recolors live as its load changes.
+ * The engineer strip opens a per-person weekly-capacity breakdown.
+ *
+ * Placements persist via the API when a backend is connected; without one they
+ * live in memory (like the Timeline tab's what-if edits), so the flow still
+ * works — and e2e still passes — offline.
  */
-export function GanttBoard({ scope }: { scope: EpicScope }) {
+export function GanttBoard({ scope, source }: { scope: EpicScope; source: DatasetSource }) {
   const [sprintId, setSprintId] = useState<string | null>(scope.sprints[0]?.id ?? null);
   const [openMemberId, setOpenMemberId] = useState<string | null>(null);
-  const view = useMemo(() => buildGanttView(scope, sprintId), [scope, sprintId]);
+  const [placements, setPlacements] = useState<PlannedPlacement[]>(scope.placements);
+  const [dragOverWeek, setDragOverWeek] = useState<number | null>(null);
+  const [dragOverBag, setDragOverBag] = useState(false);
+
+  // Re-sync when the underlying dataset changes (e.g. after a reload).
+  useEffect(() => setPlacements(scope.placements), [scope.placements]);
+
+  const liveScope = useMemo(() => ({ ...scope, placements }), [scope, placements]);
+  const view = useMemo(() => buildGanttView(liveScope, sprintId), [liveScope, sprintId]);
   const colors = useMemo(() => memberColorMap(scope.members), [scope.members]);
+
+  const byKey = useMemo(() => new Map(scope.workItems.map((w) => [w.key, w])), [scope.workItems]);
+  const sprint = view.sprint;
+
+  function place(key: string, weekIndex: number): void {
+    if (!sprint || !byKey.has(key)) return;
+    setPlacements((prev) => [
+      ...prev.filter((p) => p.workItemKey !== key),
+      { id: `local-${key}`, workItemKey: key, sprintId: sprint.id, weekIndex },
+    ]);
+    if (source === 'api') {
+      api
+        .placeWorkItem({ workItemKey: key, sprintId: sprint.id, weekIndex })
+        // eslint-disable-next-line no-console
+        .catch((e) => console.error('Failed to persist placement', e));
+    }
+  }
+
+  function unplace(key: string): void {
+    if (!placements.some((p) => p.workItemKey === key)) return;
+    setPlacements((prev) => prev.filter((p) => p.workItemKey !== key));
+    if (source === 'api') {
+      // eslint-disable-next-line no-console
+      api.unplaceWorkItem(key).catch((e) => console.error('Failed to remove placement', e));
+    }
+  }
 
   if (scope.sprints.length === 0) {
     return (
@@ -33,6 +77,25 @@ export function GanttBoard({ scope }: { scope: EpicScope }) {
   const gridStyle = { gridTemplateColumns: `220px repeat(${weeks.length}, minmax(150px, 1fr))` };
   const openMember = view.members.find((m) => m.member.id === openMemberId) ?? null;
 
+  const dropHandlers = (weekIndex: number) => ({
+    onDragOver: (e: React.DragEvent) => {
+      e.preventDefault();
+      setDragOverWeek(weekIndex);
+    },
+    onDragLeave: () => setDragOverWeek((w) => (w === weekIndex ? null : w)),
+    onDrop: (e: React.DragEvent) => {
+      e.preventDefault();
+      const key = e.dataTransfer.getData(DND_KEY);
+      if (key) place(key, weekIndex);
+      setDragOverWeek(null);
+    },
+  });
+
+  const startDrag = (key: string) => (e: React.DragEvent) => {
+    e.dataTransfer.setData(DND_KEY, key);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
   return (
     <div className="panel gantt" data-testid="gantt-board">
       <div className="gantt-toolbar">
@@ -40,7 +103,7 @@ export function GanttBoard({ scope }: { scope: EpicScope }) {
           Sprint
           <select
             data-testid="gantt-sprint-select"
-            value={view.sprint?.id ?? ''}
+            value={sprint?.id ?? ''}
             onChange={(e) => setSprintId(e.target.value)}
           >
             {scope.sprints.map((s) => (
@@ -58,7 +121,6 @@ export function GanttBoard({ scope }: { scope: EpicScope }) {
       </div>
 
       <div className="gantt-grid" style={gridStyle} data-testid="gantt-grid">
-        {/* Header row: corner + one cell per week. */}
         <div className="gantt-corner">
           Subdivision
           <span className="gantt-corner-sub">LOE (pts)</span>
@@ -66,9 +128,10 @@ export function GanttBoard({ scope }: { scope: EpicScope }) {
         {weeks.map((w) => (
           <div
             key={w.index}
-            className={`gantt-week ${w.verdict}`}
+            className={`gantt-week ${w.verdict}${dragOverWeek === w.index ? ' drop-target' : ''}`}
             data-testid={`gantt-week-${w.index}`}
             data-verdict={w.verdict}
+            {...dropHandlers(w.index)}
           >
             <div className="gantt-week-dates">
               {formatDayShort(w.start)}–{formatDayShort(w.end)}
@@ -79,15 +142,23 @@ export function GanttBoard({ scope }: { scope: EpicScope }) {
           </div>
         ))}
 
-        {/* One row per lane. */}
         {view.lanes.map((lane) => (
-          <LaneRow key={lane.label} lane={lane} weeks={weeks} view={view} />
+          <LaneRow
+            key={lane.label}
+            lane={lane}
+            weeks={weeks}
+            view={view}
+            dragOverWeek={dragOverWeek}
+            dropHandlers={dropHandlers}
+            startDrag={startDrag}
+          />
         ))}
       </div>
 
-      {/* Engineer strip. */}
       <div className="gantt-engineers" data-testid="gantt-engineer-strip">
-        <span className="gantt-engineers-label">Capacity by engineer — click for the weekly breakdown</span>
+        <span className="gantt-engineers-label">
+          Capacity by engineer — click for the weekly breakdown
+        </span>
         <div className="gantt-engineers-row">
           {view.members.map((mc) => (
             <button
@@ -104,11 +175,26 @@ export function GanttBoard({ scope }: { scope: EpicScope }) {
         </div>
       </div>
 
-      {/* Backlog bag (read-only in this slice; draggable next). */}
-      <div className="gantt-bag" data-testid="gantt-bag">
+      <div
+        className={`gantt-bag${dragOverBag ? ' drop-target' : ''}`}
+        data-testid="gantt-bag"
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragOverBag(true);
+        }}
+        onDragLeave={() => setDragOverBag(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          const key = e.dataTransfer.getData(DND_KEY);
+          if (key) unplace(key);
+          setDragOverBag(false);
+        }}
+      >
         <div className="gantt-bag-head">
           Backlog bag <span className="gantt-bag-count">{view.bag.length}</span>
-          <span className="gantt-bag-hint">Unassigned, unreserved work — drag-to-place lands next.</span>
+          <span className="gantt-bag-hint">
+            Unassigned, unreserved work — drag a card into a week to plan it.
+          </span>
         </div>
         <div className="gantt-bag-items">
           {view.bag.map((item) => (
@@ -116,6 +202,8 @@ export function GanttBoard({ scope }: { scope: EpicScope }) {
               key={item.key}
               className="gantt-chip bag"
               data-testid={`gantt-bag-item-${item.key}`}
+              draggable
+              onDragStart={startDrag(item.key)}
               title={item.title}
             >
               <strong>{item.key}</strong> {item.points}p
@@ -132,15 +220,20 @@ export function GanttBoard({ scope }: { scope: EpicScope }) {
   );
 }
 
-
 function LaneRow({
   lane,
   weeks,
   view,
+  dragOverWeek,
+  dropHandlers,
+  startDrag,
 }: {
   lane: { label: string; totalPoints: number };
-  weeks: ReturnType<typeof buildGanttView>['weeks'];
-  view: ReturnType<typeof buildGanttView>;
+  weeks: GanttView['weeks'];
+  view: GanttView;
+  dragOverWeek: number | null;
+  dropHandlers: (weekIndex: number) => Record<string, unknown>;
+  startDrag: (key: string) => (e: React.DragEvent) => void;
 }) {
   return (
     <>
@@ -153,14 +246,17 @@ function LaneRow({
         return (
           <div
             key={w.index}
-            className="gantt-cell"
+            className={`gantt-cell${dragOverWeek === w.index ? ' drop-target' : ''}`}
             data-testid={`gantt-cell-${slug(lane.label)}-${w.index}`}
+            {...dropHandlers(w.index)}
           >
-            {cell?.items.map((item) => (
+            {cell?.items.map((item: WorkItem) => (
               <span
                 key={item.key}
                 className={`gantt-chip${item.status === 'Done' ? ' done' : ''}`}
                 data-testid={`gantt-chip-${item.key}`}
+                draggable
+                onDragStart={startDrag(item.key)}
                 title={`${item.title} — ${item.status}`}
               >
                 <strong>{item.key}</strong> {item.points}p
@@ -179,7 +275,7 @@ function EngineerModal({
   onClose,
 }: {
   member: MemberWeekCapacity;
-  weeks: ReturnType<typeof buildGanttView>['weeks'];
+  weeks: GanttView['weeks'];
   onClose: () => void;
 }) {
   return (

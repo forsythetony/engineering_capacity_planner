@@ -1,4 +1,12 @@
-import type { EpicMilestone, Oncall, Pto, Team, TeamMember, VelocityOverride } from '@ecp/shared';
+import type {
+  EpicMilestone,
+  Oncall,
+  PlannedPlacement,
+  Pto,
+  Team,
+  TeamMember,
+  VelocityOverride,
+} from '@ecp/shared';
 
 /**
  * Typed client for the backend Configuration write API (project plan §6). Each
@@ -93,3 +101,13 @@ export const updateMilestone = (
 
 export const deleteMilestone = (id: string): Promise<void> =>
   request('DELETE', `/api/milestones/${encodeURIComponent(id)}`);
+
+// --- Gantt Planner placements (project plan §6a) ---------------------------
+export const placeWorkItem = (input: {
+  workItemKey: string;
+  sprintId: string;
+  weekIndex: number;
+}): Promise<PlannedPlacement> => request('PUT', '/api/placements', input);
+
+export const unplaceWorkItem = (workItemKey: string): Promise<void> =>
+  request('DELETE', `/api/placements/${encodeURIComponent(workItemKey)}`);
