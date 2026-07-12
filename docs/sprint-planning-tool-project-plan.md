@@ -1,6 +1,8 @@
-# Sprint Planning Tool — Project Plan (Draft v2, for Validation)
+# Sprint Planning Tool — Project Plan (Draft v3, for Validation)
 
-*Purpose: turn the brainstorm into something you can review, correct, and approve before any code is written. Nothing here is built yet. Section 10 tracks what's decided vs still open.*
+*Purpose: turn the brainstorm into something you can review, correct, and approve. Phases 1–5 are built (synthetic data → engine → timeline → dependency graph → configuration); the roadmap below now centers on the two remaining big items. Section 10 tracks what's decided vs still open.*
+
+*Changes in v3: the roadmap is reworked around the two next big items — the **Gantt Planner** (Phase 6, the crux of the tool) and **Jira synchronization** (Phase 7, expanded from a one-way importer into a resilient bidirectional sync). Export/import and packaging are demoted to Phase 8. The data model gains label-driven lanes, first-class synced sprints, and human-authored "planned placements" designed to survive syncs.*
 
 *Changes in v2: sprint cadence, on-call impact, and green/yellow/red thresholds are now first-class **configurable** settings (per team where it matters); epics carry configurable "relevant days" with one flagged as the gating milestone; Jira is deferred behind a mapping layer and we build on synthetic data only for now.*
 
@@ -56,8 +58,14 @@ Importer (synthetic now │ Jira later)  ──▶  Node backend  ──▶  SQL
 - **epic** — key, title, team_id.
 - **epic_milestone ("relevant days")** — epic_key, name (e.g., "First QA in stage pass", "Launch"), date, is_gating (bool). Fully configurable list; exactly one is flagged `is_gating` and drives the color verdict (see §5).
 - **user_story** — key, epic_key, title (the grouping layer).
-- **work_item** — key, story_key, title, points, status, assignee_id.
+- **work_item** — key, story_key, title, points, status, assignee_id, **labels[]**. Labels are the source for the Gantt Planner's horizontal lanes (e.g. "Navigation", "Prescriptions Tab"); a lane's total is the sum of points of the items carrying that label.
 - **dependency** — blocker_item_key, blocked_item_key.
+
+**Sprints & planning (drives the Gantt Planner, §6a)**
+
+- **sprint** — id, team_id, name, start_date, end_date. Today sprint boundaries are *derived* from cadence math; the Gantt needs sprints as **first-class stored entities** (the sprint dropdown), synced from Jira in Phase 7. Each sprint subdivides into 7-day **weeks** aligned to its start.
+- **planned_placement** — work_item_key, sprint_id, week_index. The **human-authored** output of the planning exercise: which week a piece of work is slotted into. Stored *separately* from Jira-sourced fields so it **survives syncs** — Jira owns facts (status, points, existence); placements own intent. On sync, a work item that returns `Done` is auto-pulled from its future slot, freeing that week's capacity.
+- **lane_config** — epic_key, ordered list of labels to surface as lanes (and which to hide/merge). Keeps the board's rows intentional rather than "one row per stray label."
 
 **Settings (the configurable "knobs" dashboard)**
 
@@ -90,6 +98,22 @@ Thresholds and the gating date are configurable, so each epic/team can tune what
 
 **Configuration tab** — the knobs dashboard. CRUD for teams & cadence, members, velocity overrides, PTO, on-call; plus the tunable settings (on-call multiplier, buffer thresholds) and each epic's relevant days. Also export/import of the database file.
 
+### 6a. Gantt Planner tab (Phase 6 — the crux)
+
+This is the feature the tool exists to produce, and the thing Jira doesn't do: the week-by-week capacity-fitting exercise, done by the computer instead of by hand in Excel. It **zooms into a sprint** and breaks it out week by week.
+
+- **Sprint selector** (top-left) picks the sprint; sprints are synced from Jira (Phase 7).
+- **Week columns** — one column per 7-day week, aligned to the sprint start. A 2-week sprint = 2 columns.
+- **Backlog "bag"** — an embedded list of the sprint's work that is *unstarted, unassigned, and unreserved*: things we have to do but haven't slotted yet. You drag items out of the bag into a week; the week determines the sprint placement.
+- **Green/yellow/red per week** — each week column's verdict compares `points placed that week` against `that week's computed capacity` (velocity − PTO − on-call drag). This mirrors the Excel "Weekly Total LOE vs Weekly Available Capacity" rows exactly. Overload a week → it goes red → drag something into the next week → both recompute live.
+- **Horizontal lanes** — the epic's subdivisions, sourced from work-item **labels** (Navigation, Prescriptions Tab, …), each showing its rolled-up point total. *(Second axis; see build order below.)*
+- **Engineer strip** — avatars along the bottom; click one to open a modal with that person's week-by-week capacity as an indented sublist, including PTO / on-call / velocity-override call-outs.
+- **Survives syncs** — placements are the artifact the whole tool is built around, so they persist across Jira refreshes (see `planned_placement`, §4).
+
+**Color granularity (decided):** the capacity color lives at the **week (column) level only** — capacity is a shared pool, so it has no meaning per individual `(lane × week)` cell. Cells stay neutral for capacity. *(Open: whether cells should later carry a **different** signal — e.g. "assignee on PTO this week" or "an upstream dependency isn't Done" — in a distinct hue.)*
+
+**Build order — lean first (Option B → A).** Ship the single-axis loop first: sprint dropdown + week columns + the bag + per-week G/Y/R + the engineer modal, with labels shown as pills on each chip and a "group by label" toggle. Only once that drag → recolor → spill-to-next-week loop feels right do we commit to the full two-axis grid (dedicated lane rows). An engine-led **auto-fit** first pass (greedily pack the backlog by capacity, respecting dependencies and reservations, then nudge) is a later enhancement layered on top — not part of the first increment.
+
 ---
 
 ## 7. Data strategy: synthetic now, Jira-ready by design
@@ -100,9 +124,15 @@ We build on a **synthetic data generator only** for now — no live Jira in the 
 - **Importer interface** — a single contract like `fetchEpic(): DomainEpic` with `{ epics, stories, work_items, dependencies }`.
 - **SyntheticImporter** (built now) — generates an epic of ~50 work items grouped under user stories, varied point sizes/statuses/assignees, and a realistic dependency web (including a few high-leverage blockers). This is what drives all development and testing.
 - **Field-mapping settings (stubbed now)** — reserved config for the eventual Jira mapping: Jira flavor (Cloud vs Server/Data Center), the story-points custom field, target project key, and the issue-link type that represents "blocks." These live in the settings table and the UI from early on (even if inert), so the mapping UX is designed alongside everything else rather than bolted on.
-- **JiraImporter (future phase)** — implements the same interface using those settings. The engine, timeline, and graph need zero changes when it lands.
+- **JiraImporter (Phase 7)** — implements the same interface using those settings. The engine, timeline, and graph need zero changes when it lands.
 
 Net effect: we get an easy, fully local test loop today, and a clean seam to plug real Jira into later — with the mapping already a designed part of the UX.
+
+**Phase 7 goes further than a one-way importer — it's a synchronization round-trip:**
+
+- **Seed test data into Jira** — a script that pushes our synthetic dataset *into* a real Jira instance, so we can prove the loop end-to-end against a live server rather than a fixture.
+- **Sync back and reconcile** — pull the same data out through the importer and reconcile it against local state, honoring the `planned_placement` intent layer (facts from Jira, intent stays local; completed tickets auto-pulled from future slots).
+- **Resilient, configurable field mapping** — the tool works with whatever fields a team *already has*. Story-points field, the labels that feed lanes, the sprint field, and the "blocks" link type are all mapped via settings, not hard-coded. The core value survives even when a team's Jira doesn't look exactly like ours — they map what they have and it works.
 
 ---
 
@@ -124,11 +154,11 @@ Net effect: we get an easy, fully local test loop today, and a clean seam to plu
 - **Phase 3 — Calendar/timeline UI.** Red/yellow/green vs the gating relevant-day; live recompute on edits/cuts.
 - **Phase 4 — Dependency graph UI.** DAG, left-to-right layout, high-leverage highlighting.
 - **Phase 5 — Configuration UI (knobs dashboard).** Teams/cadence, members, PTO, on-call, velocity, thresholds, relevant days, mapping stubs.
-- **Phase 6 — Export/import.** Shareable DB/export files.
-- **Phase 7 — Jira importer.** Implement the interface against real Jira using the mapping settings; setup/teardown scripts for your environment.
-- **Phase 8 — Polish & packaging.** e2e hardening, optional Tauri/Electron wrapper.
+- **Phase 6 — Gantt Planner.** *(next — the crux of the tool; see §6a.)* The week-by-week allocation board: sprint selector, week columns, a backlog "bag" of unreserved work you drag into weeks, per-week green/yellow/red capacity, epic subdivisions as label-driven horizontal lanes, and an engineer strip that opens a per-person capacity breakdown. Built **lean-first** (Option B): the single-axis week/capacity/drag loop before the full two-axis grid. Introduces label-driven lanes, first-class stored sprints, and human-authored `planned_placement`s designed to survive later syncs.
+- **Phase 7 — Jira synchronization.** *(see §7.)* Implement the importer against real Jira and go bidirectional: seed a Jira instance with test data, sync it back, and reconcile against the local intent layer. Field mapping is **resilient and configurable** — the tool works with whatever fields a team already has (story-points, labels, sprint, "blocks" link type) rather than requiring an exact shape. Jira owns facts; the Gantt's placements own intent; a completed ticket is auto-pulled from its future slot, freeing that week's capacity.
+- **Phase 8 — Export/import, polish & packaging.** Shareable DB/export files, e2e hardening, optional Tauri/Electron wrapper.
 
-Suggested first milestone: **Phases 1–3** (synthetic data → engine → colored timeline) to prove the core hypothesis before investing in the graph, config surface, and Jira.
+**Status:** Phases 1–5 are complete (synthetic data → engine → timeline → dependency graph → configuration). The next milestone is **Phase 6 (Gantt Planner)**, then **Phase 7 (Jira synchronization)**.
 
 ---
 
@@ -142,11 +172,14 @@ Suggested first milestone: **Phases 1–3** (synthetic data → engine → color
 4. Color logic = buffer in days between **projected dev-complete** and the epic's **gating "relevant day"** (e.g., first QA-in-stage pass); **green/yellow/red thresholds and the relevant days are all configurable**.
 5. Data source = **synthetic generator only** for now, behind a mapping/importer layer; Jira deferred.
 6. Jira specifics (flavor, story-point field, project key, "blocks" link type) = **configurable settings**, designed in early but inert until Phase 7.
+7. Next milestone = **Gantt Planner** (Phase 6), built **lean-first** (single-axis week/capacity/drag loop) toward the full two-axis board; then **Jira synchronization** (Phase 7).
+8. Gantt capacity color = **week-level only** (placed points vs weekly capacity), mirroring the Excel "Weekly Total LOE vs Weekly Available Capacity" rows. Per-cell color is *not* used for capacity.
+9. Backend language confirmed **Node/TS** (Phases 1–5 shipped on it).
 
 **Still open**
 
-- Backend language: **Node/TS (recommended)** vs Python/FastAPI — confirm.
-- First milestone scope: is **Phases 1–3** the right first thing to build?
+- Whether Gantt `(lane × week)` cells should later carry a **non-capacity** signal (assignee on PTO that week / upstream dependency not Done) in a distinct hue.
+- Sprint sync mechanics: how sprints and their date ranges are read from Jira (board/sprint API vs a mapped field) — resolved during Phase 7.
 
 ---
 
