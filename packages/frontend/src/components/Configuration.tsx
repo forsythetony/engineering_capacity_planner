@@ -1,8 +1,14 @@
-import { useState } from 'react';
-import type { DomainDataset, IsoDate, Weekday } from '@ecp/shared';
+import { useMemo, useState } from 'react';
+import type { DomainDataset, IsoDate, TeamMember, Weekday } from '@ecp/shared';
 import { SETTING_KEYS } from '@ecp/shared';
 import { formatDate } from '../lib/format';
+import { memberColorMap } from '../lib/memberColors';
+import { buildAvailabilityEntries, type AvailabilityEntry, type AvailabilityKind } from '../lib/availability';
 import * as api from '../data/api';
+import { AvailabilityCalendar } from './AvailabilityCalendar';
+import { AvailabilityList } from './AvailabilityList';
+import { AddAvailabilityModal, type NewAvailability } from './AddAvailabilityModal';
+import { MemberAvatar } from './MemberAvatar';
 
 interface ConfigurationProps {
   dataset: DomainDataset;
@@ -54,7 +60,7 @@ export function Configuration({ dataset, teamId, epicKey, editable, onReload }: 
   const disabled = !editable || busy;
   const team = dataset.teams.find((t) => t.id === teamId)!;
   const members = dataset.members.filter((m) => m.teamId === teamId);
-  const memberName = (id: string | null) => members.find((m) => m.id === id)?.name ?? '—';
+  const colors = useMemo(() => memberColorMap(members), [members]);
 
   return (
     <div data-testid="configuration">
@@ -72,8 +78,16 @@ export function Configuration({ dataset, teamId, epicKey, editable, onReload }: 
 
       <KnobsSection dataset={dataset} disabled={disabled} run={run} />
       <CadenceSection team={team} disabled={disabled} run={run} />
-      <MembersSection members={members} teamId={teamId} disabled={disabled} run={run} />
-      <ModifiersSection dataset={dataset} members={members} memberName={memberName} disabled={disabled} run={run} />
+      <MembersSection members={members} colors={colors} teamId={teamId} disabled={disabled} run={run} />
+      <ModifiersSection
+        dataset={dataset}
+        members={members}
+        colors={colors}
+        disabled={disabled}
+        editable={editable}
+        run={run}
+        onReload={onReload}
+      />
       <MilestonesSection dataset={dataset} epicKey={epicKey} disabled={disabled} run={run} />
       <JiraSection dataset={dataset} disabled={disabled} run={run} />
     </div>
@@ -207,8 +221,8 @@ function CadenceSection({ team, disabled, run }: { team: DomainDataset['teams'][
 // ---------------------------------------------------------------------------
 // Members
 // ---------------------------------------------------------------------------
-function MembersSection({ members, teamId, disabled, run }: {
-  members: DomainDataset['members']; teamId: string; disabled: boolean; run: Run;
+function MembersSection({ members, colors, teamId, disabled, run }: {
+  members: TeamMember[]; colors: Map<string, string>; teamId: string; disabled: boolean; run: Run;
 }) {
   const [name, setName] = useState('');
   const [velocity, setVelocity] = useState('10');
@@ -218,7 +232,7 @@ function MembersSection({ members, teamId, disabled, run }: {
       <SectionTitle title="Team members" hint="Per-person velocity (points / sprint) and who's active." />
       <div className="config-list" data-testid="cfg-members">
         {members.map((m) => (
-          <MemberRow key={m.id} member={m} disabled={disabled} run={run} />
+          <MemberRow key={m.id} member={m} color={colors.get(m.id) ?? '#6b7280'} disabled={disabled} run={run} />
         ))}
       </div>
       <div className="controls config-add">
@@ -241,11 +255,12 @@ function MembersSection({ members, teamId, disabled, run }: {
   );
 }
 
-function MemberRow({ member, disabled, run }: { member: DomainDataset['members'][number]; disabled: boolean; run: Run }) {
+function MemberRow({ member, color, disabled, run }: { member: TeamMember; color: string; disabled: boolean; run: Run }) {
   const [velocity, setVelocity] = useState(String(member.baseVelocity));
   const dirty = Number(velocity) !== member.baseVelocity;
   return (
     <div className={`config-row${member.active ? '' : ' inactive'}`} data-testid={`cfg-member-${member.id}`}>
+      <MemberAvatar name={member.name} color={color} size={22} />
       <span className="config-primary">{member.name}</span>
       <label className="inline-check">
         <input type="checkbox" checked={member.active} disabled={disabled}
@@ -268,87 +283,77 @@ function MemberRow({ member, disabled, run }: { member: DomainDataset['members']
 }
 
 // ---------------------------------------------------------------------------
-// PTO / on-call / velocity overrides
+// Availability — PTO / on-call / velocity overrides, as a calendar + list
 // ---------------------------------------------------------------------------
-function ModifiersSection({ dataset, members, memberName, disabled, run }: {
-  dataset: DomainDataset; members: DomainDataset['members']; memberName: (id: string | null) => string; disabled: boolean; run: Run;
+function ModifiersSection({ dataset, members, colors, disabled, editable, run, onReload }: {
+  dataset: DomainDataset;
+  members: TeamMember[];
+  colors: Map<string, string>;
+  disabled: boolean;
+  editable: boolean;
+  run: Run;
+  onReload: () => Promise<void>;
 }) {
+  const [view, setView] = useState<'calendar' | 'list'>('calendar');
+  const [adding, setAdding] = useState(false);
+  const entries = useMemo(
+    () => buildAvailabilityEntries(dataset, members, colors),
+    [dataset, members, colors],
+  );
+
+  const onDelete = (entry: AvailabilityEntry) => {
+    const del =
+      entry.kind === 'pto'
+        ? api.deletePto
+        : entry.kind === 'oncall'
+          ? api.deleteOncall
+          : api.deleteVelocityOverride;
+    run(() => del(entry.id));
+  };
+
+  // The modal surfaces its own errors and stays open on failure, so it uses a
+  // throwing add (not the error-swallowing `run`).
+  const onAdd = async (kind: AvailabilityKind, input: NewAvailability) => {
+    if (kind === 'pto') await api.createPto(input);
+    else if (kind === 'oncall') await api.createOncall(input);
+    else await api.createVelocityOverride({ ...input, multiplier: input.multiplier ?? 1 });
+    await onReload();
+  };
+
   return (
     <section className="panel">
-      <SectionTitle title="Availability" hint="PTO, on-call rotations, and temporary velocity changes." />
-
-      <RangeList
-        testid="cfg-pto" heading="PTO" members={members} disabled={disabled}
-        rows={dataset.pto.map((p) => ({ id: p.id, label: `${memberName(p.memberId)}: ${formatDate(p.startDate)} → ${formatDate(p.endDate)}` }))}
-        onAdd={(memberId, start, end) => run(() => api.createPto({ memberId, startDate: start, endDate: end }))}
-        onDelete={(id) => run(() => api.deletePto(id))}
-      />
-      <RangeList
-        testid="cfg-oncall" heading="On-call" members={members} disabled={disabled}
-        rows={dataset.oncall.map((o) => ({ id: o.id, label: `${memberName(o.memberId)}: ${formatDate(o.startDate)} → ${formatDate(o.endDate)}` }))}
-        onAdd={(memberId, start, end) => run(() => api.createOncall({ memberId, startDate: start, endDate: end }))}
-        onDelete={(id) => run(() => api.deleteOncall(id))}
-      />
-      <RangeList
-        testid="cfg-velocity" heading="Velocity overrides" members={members} disabled={disabled} withMultiplier
-        rows={dataset.velocityOverrides.map((v) => ({ id: v.id, label: `${memberName(v.memberId)}: ×${v.multiplier} (${formatDate(v.startDate)} → ${formatDate(v.endDate)})` }))}
-        onAdd={(memberId, start, end, multiplier) => run(() => api.createVelocityOverride({ memberId, startDate: start, endDate: end, multiplier: multiplier ?? 1 }))}
-        onDelete={(id) => run(() => api.deleteVelocityOverride(id))}
-      />
-    </section>
-  );
-}
-
-function RangeList({ testid, heading, members, rows, disabled, withMultiplier, onAdd, onDelete }: {
-  testid: string; heading: string; members: DomainDataset['members']; rows: { id: string; label: string }[];
-  disabled: boolean; withMultiplier?: boolean;
-  onAdd: (memberId: string, start: IsoDate, end: IsoDate, multiplier?: number) => void;
-  onDelete: (id: string) => void;
-}) {
-  const [memberId, setMemberId] = useState(members[0]?.id ?? '');
-  const [start, setStart] = useState(todayIso());
-  const [end, setEnd] = useState(todayIso());
-  const [mult, setMult] = useState('0.5');
-
-  return (
-    <div className="modifier-block" data-testid={testid}>
-      <h3 className="subheading">{heading}</h3>
-      <div className="config-list">
-        {rows.length === 0 && <div className="hint empty">None.</div>}
-        {rows.map((r) => (
-          <div className="config-row" key={r.id} data-testid={`${testid}-${r.id}`}>
-            <span className="config-primary">{r.label}</span>
-            <button type="button" className="link-btn danger" disabled={disabled} onClick={() => onDelete(r.id)}>
-              remove
+      <div className="section-title">
+        <h2>Availability</h2>
+        <div className="section-actions">
+          <div className="subtabs" role="tablist" aria-label="Availability view">
+            <button type="button" role="tab" aria-selected={view === 'calendar'}
+              className={`subtab${view === 'calendar' ? ' active' : ''}`} data-testid="avail-view-calendar"
+              onClick={() => setView('calendar')}>
+              Calendar
+            </button>
+            <button type="button" role="tab" aria-selected={view === 'list'}
+              className={`subtab${view === 'list' ? ' active' : ''}`} data-testid="avail-view-list"
+              onClick={() => setView('list')}>
+              List
             </button>
           </div>
-        ))}
+          <button type="button" className="btn primary add-btn" disabled={disabled} data-testid="avail-add"
+            onClick={() => setAdding(true)}>
+            ＋ Add
+          </button>
+        </div>
       </div>
-      <div className="controls config-add">
-        <Field label="Member">
-          <select value={memberId} disabled={disabled} onChange={(e) => setMemberId(e.target.value)}>
-            {members.map((m) => (
-              <option key={m.id} value={m.id}>{m.name}</option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Start">
-          <input type="date" value={start} disabled={disabled} onChange={(e) => setStart(e.target.value)} />
-        </Field>
-        <Field label="End">
-          <input type="date" value={end} disabled={disabled} onChange={(e) => setEnd(e.target.value)} />
-        </Field>
-        {withMultiplier && (
-          <Field label="Multiplier">
-            <input type="number" min={0} step={0.05} value={mult} disabled={disabled} onChange={(e) => setMult(e.target.value)} />
-          </Field>
-        )}
-        <button type="button" className="btn" disabled={disabled || !memberId} data-testid={`${testid}-add`}
-          onClick={() => onAdd(memberId, start, end, withMultiplier ? Number(mult) : undefined)}>
-          Add
-        </button>
-      </div>
-    </div>
+
+      {view === 'calendar' ? (
+        <AvailabilityCalendar entries={entries} disabled={disabled} onDelete={onDelete} />
+      ) : (
+        <AvailabilityList entries={entries} disabled={disabled} onDelete={onDelete} />
+      )}
+
+      {adding && editable && (
+        <AddAvailabilityModal members={members} onClose={() => setAdding(false)} onAdd={onAdd} />
+      )}
+    </section>
   );
 }
 

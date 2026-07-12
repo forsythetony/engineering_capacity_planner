@@ -110,10 +110,9 @@ test.describe('Configuration tab', () => {
 
     const config = page.getByTestId('configuration');
     await expect(config).toBeVisible();
-    // Every knobs section is present.
+    // Core sections are present.
     await expect(page.getByTestId('cfg-members')).toBeVisible();
     await expect(page.getByTestId('cfg-milestones')).toBeVisible();
-    await expect(page.getByTestId('cfg-pto')).toBeVisible();
 
     // The e2e harness runs without a backend, so editing is disabled and the
     // read-only notice explains why.
@@ -123,5 +122,29 @@ test.describe('Configuration tab', () => {
 
     // The gating relevant day is flagged in the list.
     await expect(page.locator('.config-row.gating')).toHaveCount(1);
+  });
+
+  test('availability has calendar + list views with member avatars', async ({ page }) => {
+    await page.goto('/');
+    await page.getByTestId('tab-configuration').click();
+
+    // Calendar view renders bands from the fixture, each with a member avatar.
+    const calendar = page.getByTestId('availability-calendar');
+    await expect(calendar).toBeVisible();
+    await expect(calendar.locator('.cal-band')).not.toHaveCount(0);
+    await expect(calendar.locator('.avatar').first()).toBeVisible();
+
+    // The Add button is disabled (no backend), so the modal can't open here.
+    await expect(page.getByTestId('avail-add')).toBeDisabled();
+
+    // Switch to the searchable list view.
+    await page.getByTestId('avail-view-list').click();
+    await expect(page.getByTestId('availability-list')).toBeVisible();
+    const rowsBefore = await page.locator('[data-testid^="avail-row-"]').count();
+    expect(rowsBefore).toBeGreaterThan(0);
+
+    // Searching a non-existent member filters everything out.
+    await page.getByTestId('availability-search').fill('zzzznobody');
+    await expect(page.locator('[data-testid^="avail-row-"]')).toHaveCount(0);
   });
 });
