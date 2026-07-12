@@ -17,6 +17,8 @@ function sortDataset(data: ReturnType<typeof generateSyntheticDataset>) {
     stories: [...data.stories].sort(byKey((s) => s.key)),
     workItems: [...data.workItems].sort(byKey((w) => w.key)),
     dependencies: [...data.dependencies].sort(byKey((d) => d.id)),
+    sprints: [...data.sprints].sort(byKey((s) => s.id)),
+    placements: [...data.placements].sort(byKey((p) => p.id)),
     settings: [...data.settings].sort(byKey((s) => `${s.key}:${s.scope}:${s.scopeId}`)),
   };
 }

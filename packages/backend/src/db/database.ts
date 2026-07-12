@@ -40,6 +40,9 @@ function migrate(db: Db): void {
   for (const table of ['pto', 'oncall', 'velocity_override']) {
     ensureColumn(db, table, 'note', 'TEXT');
   }
+  // Gantt Planner (project plan §6a): labels on work items. The `sprint` and
+  // `planned_placement` tables are created by `CREATE TABLE IF NOT EXISTS`.
+  ensureColumn(db, 'work_item', 'labels', "TEXT NOT NULL DEFAULT '[]'");
 }
 
 /** Add `column` to `table` if it's not already present. */

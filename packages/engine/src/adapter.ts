@@ -69,5 +69,9 @@ export function readEngineConfig(dataset: DomainDataset): Partial<EngineConfig> 
       SETTING_KEYS.GREEN_MIN_BUFFER_DAYS,
       DEFAULT_ENGINE_CONFIG.greenMinBufferDays,
     ),
+    weekYellowLoadFraction: num(
+      SETTING_KEYS.WEEK_YELLOW_LOAD_FRACTION,
+      DEFAULT_ENGINE_CONFIG.weekYellowLoadFraction,
+    ),
   };
 }

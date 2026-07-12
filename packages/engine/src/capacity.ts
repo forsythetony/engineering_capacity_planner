@@ -1,5 +1,5 @@
 import type { IsoDate, Oncall, Pto, TeamMember, VelocityOverride } from '@ecp/shared';
-import type { Sprint } from './calendar.js';
+import type { SprintWindow } from './calendar.js';
 
 interface DateRange {
   start: IsoDate;
@@ -99,7 +99,7 @@ export function memberDayFactor(
  * throughput. Prorating by the sprint's own working-day count means a partial
  * (already-underway) sprint contributes only its remaining days.
  */
-export function dayCapacity(date: IsoDate, sprint: Sprint, ctx: CapacityContext): number {
+export function dayCapacity(date: IsoDate, sprint: SprintWindow, ctx: CapacityContext): number {
   const workingDaysInSprint = sprint.workingDays.length;
   if (workingDaysInSprint === 0) return 0;
   let total = 0;
@@ -110,7 +110,7 @@ export function dayCapacity(date: IsoDate, sprint: Sprint, ctx: CapacityContext)
 }
 
 /** Total points the team can produce across a full sprint. */
-export function sprintCapacity(sprint: Sprint, ctx: CapacityContext): number {
+export function sprintCapacity(sprint: SprintWindow, ctx: CapacityContext): number {
   let total = 0;
   for (const day of sprint.workingDays) total += dayCapacity(day, sprint, ctx);
   return total;

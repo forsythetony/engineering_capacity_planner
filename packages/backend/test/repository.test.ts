@@ -187,3 +187,38 @@ describe('epic milestones (gating invariant)', () => {
     expectHttp(() => repo.deleteMilestone(db, 'nope'), 404);
   });
 });
+
+describe('placements (Gantt Planner)', () => {
+  // Start from an empty board so assertions don't depend on the seeded plan.
+  beforeEach(() => {
+    db.prepare('DELETE FROM planned_placement').run();
+  });
+
+  it('places a work item into a sprint week and persists it', () => {
+    const p = repo.upsertPlacement(db, { workItemKey: 'CKT-1', sprintId: 'SP1', weekIndex: 0 });
+    expect(p).toMatchObject({ workItemKey: 'CKT-1', sprintId: 'SP1', weekIndex: 0 });
+    const persisted = readDataset(db).placements.find((x) => x.workItemKey === 'CKT-1')!;
+    expect(persisted.sprintId).toBe('SP1');
+  });
+
+  it('moves a work item rather than duplicating it (one placement per item)', () => {
+    repo.upsertPlacement(db, { workItemKey: 'CKT-1', sprintId: 'SP1', weekIndex: 0 });
+    repo.upsertPlacement(db, { workItemKey: 'CKT-1', sprintId: 'SP2', weekIndex: 1 });
+    const placements = readDataset(db).placements.filter((x) => x.workItemKey === 'CKT-1');
+    expect(placements).toHaveLength(1);
+    expect(placements[0]).toMatchObject({ sprintId: 'SP2', weekIndex: 1 });
+  });
+
+  it('removes a placement (back to the backlog bag)', () => {
+    repo.upsertPlacement(db, { workItemKey: 'CKT-1', sprintId: 'SP1', weekIndex: 0 });
+    repo.deletePlacement(db, 'CKT-1');
+    expect(readDataset(db).placements.find((x) => x.workItemKey === 'CKT-1')).toBeUndefined();
+  });
+
+  it('validates the input, the references, and the week range', () => {
+    expectHttp(() => repo.upsertPlacement(db, { workItemKey: 'CKT-1', sprintId: 'SP1', weekIndex: 9 }), 400);
+    expectHttp(() => repo.upsertPlacement(db, { workItemKey: 'NOPE', sprintId: 'SP1', weekIndex: 0 }), 404);
+    expectHttp(() => repo.upsertPlacement(db, { workItemKey: 'CKT-1', sprintId: 'NOPE', weekIndex: 0 }), 404);
+    expectHttp(() => repo.deletePlacement(db, 'CKT-1'), 404); // nothing placed yet
+  });
+});

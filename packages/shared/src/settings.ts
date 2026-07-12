@@ -12,6 +12,12 @@ export const SETTING_KEYS = {
   /** Buffer (working days) at/above which the epic verdict is green. */
   GREEN_MIN_BUFFER_DAYS: 'green_min_buffer_days',
   /**
+   * Gantt Planner: fraction of a week's capacity at/above which the week turns
+   * yellow ("tight"). `1.0` = yellow only once fully loaded; lower widens the
+   * warning band. Over 100% loaded is always red. (Project plan §6a.)
+   */
+  WEEK_YELLOW_LOAD_FRACTION: 'week_yellow_load_fraction',
+  /**
    * The "today" the UI defaults its projection to. Set by the synthetic
    * importer so the demo scenario is reproducible; absent for real data, where
    * the UI uses the actual current date.
@@ -43,6 +49,8 @@ export const ENGINE_DEFAULTS = {
   ONCALL_MULTIPLIER: 0.5,
   /** Comfortable slack before the gating day, in working days. */
   GREEN_MIN_BUFFER_DAYS: 5,
+  /** A Gantt week turns yellow only once fully loaded (100% of capacity). */
+  WEEK_YELLOW_LOAD_FRACTION: 1,
 } as const;
 
 /**
@@ -59,6 +67,7 @@ export function defaultGlobalSettings(): Setting[] {
   return [
     global(SETTING_KEYS.ONCALL_MULTIPLIER, ENGINE_DEFAULTS.ONCALL_MULTIPLIER),
     global(SETTING_KEYS.GREEN_MIN_BUFFER_DAYS, ENGINE_DEFAULTS.GREEN_MIN_BUFFER_DAYS),
+    global(SETTING_KEYS.WEEK_YELLOW_LOAD_FRACTION, ENGINE_DEFAULTS.WEEK_YELLOW_LOAD_FRACTION),
     global(SETTING_KEYS.JIRA_FLAVOR, null),
     global(SETTING_KEYS.JIRA_STORY_POINTS_FIELD, null),
     global(SETTING_KEYS.JIRA_PROJECT_KEY, null),

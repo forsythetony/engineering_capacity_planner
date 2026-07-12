@@ -78,7 +78,10 @@ CREATE TABLE IF NOT EXISTS work_item (
   title       TEXT NOT NULL,
   points      REAL NOT NULL,
   status      TEXT NOT NULL,
-  assignee_id TEXT REFERENCES team_member(id) ON DELETE SET NULL
+  assignee_id TEXT REFERENCES team_member(id) ON DELETE SET NULL,
+  -- JSON array of freeform labels, e.g. '["Cart","Payments"]'. Drives the
+  -- Gantt Planner's horizontal lanes. Defaults to an empty array.
+  labels      TEXT NOT NULL DEFAULT '[]'
 );
 
 CREATE TABLE IF NOT EXISTS dependency (
@@ -86,6 +89,25 @@ CREATE TABLE IF NOT EXISTS dependency (
   blocker_item_key  TEXT NOT NULL REFERENCES work_item(key) ON DELETE CASCADE,
   blocked_item_key  TEXT NOT NULL REFERENCES work_item(key) ON DELETE CASCADE,
   UNIQUE (blocker_item_key, blocked_item_key)
+);
+
+-- Stored sprints (project plan §6a). Authoritative bounds for the Gantt weeks;
+-- synthetic data derives them from cadence, Jira supplies them in Phase 7.
+CREATE TABLE IF NOT EXISTS sprint (
+  id         TEXT PRIMARY KEY,
+  team_id    TEXT NOT NULL REFERENCES team(id) ON DELETE CASCADE,
+  name       TEXT NOT NULL,
+  start_date TEXT NOT NULL,
+  end_date   TEXT NOT NULL
+);
+
+-- Human-authored week placements for the Gantt Planner (project plan §6a).
+-- At most one placement per work item (unplaced items live in the backlog bag).
+CREATE TABLE IF NOT EXISTS planned_placement (
+  id            TEXT PRIMARY KEY,
+  work_item_key TEXT NOT NULL UNIQUE REFERENCES work_item(key) ON DELETE CASCADE,
+  sprint_id     TEXT NOT NULL REFERENCES sprint(id) ON DELETE CASCADE,
+  week_index    INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS settings (
@@ -105,6 +127,8 @@ CREATE INDEX IF NOT EXISTS idx_work_item_assignee ON work_item(assignee_id);
 CREATE INDEX IF NOT EXISTS idx_milestone_epic     ON epic_milestone(epic_key);
 CREATE INDEX IF NOT EXISTS idx_dep_blocker        ON dependency(blocker_item_key);
 CREATE INDEX IF NOT EXISTS idx_dep_blocked        ON dependency(blocked_item_key);
+CREATE INDEX IF NOT EXISTS idx_sprint_team        ON sprint(team_id);
+CREATE INDEX IF NOT EXISTS idx_placement_sprint   ON planned_placement(sprint_id);
 `;
 
 /** Order tables must be inserted into to satisfy foreign keys. */
@@ -114,11 +138,13 @@ export const INSERT_ORDER = [
   'velocity_override',
   'pto',
   'oncall',
+  'sprint',
   'epic',
   'epic_milestone',
   'user_story',
   'work_item',
   'dependency',
+  'planned_placement',
   'settings',
 ] as const;
 

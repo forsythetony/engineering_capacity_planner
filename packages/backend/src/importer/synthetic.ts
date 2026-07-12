@@ -6,7 +6,9 @@ import type {
   Importer,
   IsoDate,
   Oncall,
+  PlannedPlacement,
   Pto,
+  Sprint,
   Team,
   TeamMember,
   UserStory,
@@ -24,7 +26,13 @@ import {
   isWorkingDay,
   SETTING_KEYS,
 } from '@ecp/shared';
-import { project } from '@ecp/engine';
+import {
+  buildCapacityContext,
+  project,
+  sprintByIndex,
+  sprintIndexFor,
+  weeklyPlan,
+} from '@ecp/engine';
 import { Rng } from './rng.js';
 
 export interface SyntheticConfig {
@@ -120,6 +128,23 @@ const WORK_NOUNS = [
   'currency formatting',
   'analytics events',
 ] as const;
+
+/** Generic Checkout-epic components; each work item carries one as a label. */
+const LABELS = [
+  'Cart',
+  'Payments',
+  'Shipping',
+  'Promotions',
+  'Checkout UI',
+  'Order Confirmation',
+  'Notifications',
+  'Analytics',
+  'Accessibility',
+  'QA & Launch',
+] as const;
+
+/** How many sprints (current + upcoming) the Gantt Planner offers. */
+const SPRINT_COUNT = 4;
 
 const POINT_VALUES = [1, 2, 3, 5, 8] as const;
 const POINT_WEIGHTS = [2, 3, 3, 2, 1] as const;
@@ -260,6 +285,7 @@ export function generateSyntheticDataset(config: SyntheticConfig = {}): DomainDa
       points,
       status,
       assigneeId,
+      labels: [rng.pick(LABELS)],
     });
   }
 
@@ -305,6 +331,18 @@ export function generateSyntheticDataset(config: SyntheticConfig = {}): DomainDa
     },
   ];
 
+  // --- Sprints (stored entities) and a calibrated set of week placements ---
+  const sprints = generateSprints(team, today);
+  const placements = seedPlacements({
+    sprints,
+    team,
+    members,
+    pto,
+    oncall,
+    velocityOverrides,
+    workItems,
+  });
+
   return {
     teams: [team],
     members,
@@ -316,8 +354,97 @@ export function generateSyntheticDataset(config: SyntheticConfig = {}): DomainDa
     stories,
     workItems,
     dependencies,
+    sprints,
+    placements,
     settings: [...defaultGlobalSettings(), planningTodaySetting(today)],
   };
+}
+
+/** The current sprint plus the next few, derived from the team's cadence. */
+function generateSprints(team: Team, today: IsoDate): Sprint[] {
+  const currentIndex = sprintIndexFor(today, team);
+  const sprints: Sprint[] = [];
+  for (let i = 0; i < SPRINT_COUNT; i++) {
+    const window = sprintByIndex(team, currentIndex + i);
+    sprints.push({
+      id: `SP${i + 1}`,
+      teamId: team.id,
+      name: `Sprint ${i + 1}`,
+      startDate: window.start,
+      endDate: window.end,
+    });
+  }
+  return sprints;
+}
+
+/**
+ * Seed a plausible starting plan: place a subset of the not-yet-done backlog
+ * into the first two sprints' weeks so the board opens populated (with the rest
+ * left in the backlog "bag"). Loads are calibrated against each week's computed
+ * capacity so the demo shows an over-committed week alongside comfortable ones.
+ */
+function seedPlacements(inputs: {
+  sprints: Sprint[];
+  team: Team;
+  members: TeamMember[];
+  pto: Pto[];
+  oncall: Oncall[];
+  velocityOverrides: VelocityOverride[];
+  workItems: WorkItem[];
+}): PlannedPlacement[] {
+  const { sprints, team } = inputs;
+  if (sprints.length === 0) return [];
+
+  const ctx = buildCapacityContext({
+    members: inputs.members,
+    pto: inputs.pto,
+    oncall: inputs.oncall,
+    velocityOverrides: inputs.velocityOverrides,
+    oncallMultiplier: ENGINE_DEFAULTS.ONCALL_MULTIPLIER,
+  });
+
+  // Target load per slot as a fraction of that week's capacity. The first week
+  // is intentionally over-committed (red); the rest sit comfortably (green).
+  const slotTargets: Array<{ sprintIdx: number; weekIndex: number; loadFraction: number }> = [
+    { sprintIdx: 0, weekIndex: 0, loadFraction: 1.15 },
+    { sprintIdx: 0, weekIndex: 1, loadFraction: 0.55 },
+    { sprintIdx: 1, weekIndex: 0, loadFraction: 0.8 },
+    { sprintIdx: 1, weekIndex: 1, loadFraction: 0.45 },
+  ];
+
+  const candidates = inputs.workItems.filter((w) => w.status !== 'Done');
+  const placements: PlannedPlacement[] = [];
+  let cursor = 0;
+  let ppId = 0;
+
+  for (const slot of slotTargets) {
+    const sprint = sprints[slot.sprintIdx];
+    if (!sprint) continue;
+    const weeks = weeklyPlan({
+      startDate: sprint.startDate,
+      endDate: sprint.endDate,
+      workingDays: team.workingDays,
+      capacityCtx: ctx,
+      placedPointsByWeek: new Map(),
+    });
+    const capacity = weeks[slot.weekIndex]?.capacity ?? 0;
+    const target = capacity * slot.loadFraction;
+
+    let placed = 0;
+    while (cursor < candidates.length && placed < target) {
+      const item = candidates[cursor]!;
+      placements.push({
+        id: `PP${++ppId}`,
+        workItemKey: item.key,
+        sprintId: sprint.id,
+        weekIndex: slot.weekIndex,
+      });
+      placed += item.points;
+      cursor++;
+    }
+  }
+
+  return placements;
 }
 
 /**

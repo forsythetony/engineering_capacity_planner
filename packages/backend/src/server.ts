@@ -5,6 +5,7 @@ import { readDataset, writeDataset } from './db/persist.js';
 import { createImporter } from './importer/factory.js';
 import { HttpError } from './http-error.js';
 import { registerConfigRoutes } from './routes/config.js';
+import { registerPlanningRoutes } from './routes/planning.js';
 
 /**
  * Minimal localhost API serving the domain data to the frontend.
@@ -66,6 +67,8 @@ export async function buildServer(overrides: Partial<AppConfig> = {}) {
 
   // Mutating Configuration-tab endpoints (project plan §6).
   registerConfigRoutes(app, db);
+  // Gantt Planner placement endpoints (project plan §6a).
+  registerPlanningRoutes(app, db);
 
   app.addHook('onClose', async () => {
     db.close();

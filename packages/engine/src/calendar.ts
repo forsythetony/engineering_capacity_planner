@@ -10,7 +10,7 @@ import { addDays, diffDays, enumerateWorkingDays } from '@ecp/shared';
  * the anchor is a real sprint start, every boundary lands on the configured
  * start weekday (when the length is a whole number of weeks).
  */
-export interface Sprint {
+export interface SprintWindow {
   index: number;
   /** First calendar day of the sprint (inclusive). */
   start: IsoDate;
@@ -26,7 +26,7 @@ export function sprintIndexFor(date: IsoDate, team: Team): number {
 }
 
 /** Build the sprint with a given index. */
-export function sprintByIndex(team: Team, index: number): Sprint {
+export function sprintByIndex(team: Team, index: number): SprintWindow {
   const start = addDays(team.sprintAnchorDate, index * team.sprintLengthDays);
   const end = addDays(start, team.sprintLengthDays - 1);
   return {
@@ -38,7 +38,7 @@ export function sprintByIndex(team: Team, index: number): Sprint {
 }
 
 /** The sprint that contains `date`. */
-export function sprintFor(date: IsoDate, team: Team): Sprint {
+export function sprintFor(date: IsoDate, team: Team): SprintWindow {
   return sprintByIndex(team, sprintIndexFor(date, team));
 }
 
@@ -47,9 +47,9 @@ export function sprintFor(date: IsoDate, team: Team): Sprint {
  * days that share a sprint, so caching avoids rebuilding the same sprint (and
  * re-enumerating its working days) repeatedly.
  */
-export function makeSprintCache(team: Team): (index: number) => Sprint {
-  const cache = new Map<number, Sprint>();
-  return (index: number): Sprint => {
+export function makeSprintCache(team: Team): (index: number) => SprintWindow {
+  const cache = new Map<number, SprintWindow>();
+  return (index: number): SprintWindow => {
     let sprint = cache.get(index);
     if (sprint === undefined) {
       sprint = sprintByIndex(team, index);

@@ -142,6 +142,12 @@ export interface WorkItem {
   status: WorkItemStatus;
   /** {@link TeamMember.id} of the assignee, or `null` if unassigned. */
   assigneeId: string | null;
+  /**
+   * Freeform labels/tags carried by the item. They drive the Gantt Planner's
+   * horizontal lanes (a lane's total is the sum of points of items sharing a
+   * label). Optional — an item may carry none. (Project plan §6a.)
+   */
+  labels?: string[];
 }
 
 /** A "blocked by" edge: {@link blockerItemKey} must finish before {@link blockedItemKey}. */
@@ -149,6 +155,38 @@ export interface Dependency {
   id: string;
   blockerItemKey: string;
   blockedItemKey: string;
+}
+
+// ---------------------------------------------------------------------------
+// Sprints & planning (drive the Gantt Planner, project plan §6a)
+// ---------------------------------------------------------------------------
+
+/**
+ * A sprint as a first-class, stored entity. Its `startDate`/`endDate` are
+ * authoritative for the Gantt Planner's week columns (7-day slices from the
+ * start). Jira sprints map onto this shape in Phase 7; on synthetic data the
+ * importer derives them from the team's cadence.
+ */
+export interface Sprint {
+  id: string;
+  teamId: string;
+  name: string;
+  startDate: IsoDate;
+  endDate: IsoDate;
+}
+
+/**
+ * The human-authored output of the planning exercise: which week of which
+ * sprint a work item is slotted into. `weekIndex` is 0-based within the sprint
+ * ({@link Sprint} split into 7-day weeks). At most one placement per work item;
+ * items with no placement live in the backlog "bag". Stored separately from
+ * source (Jira) fields so it survives syncs.
+ */
+export interface PlannedPlacement {
+  id: string;
+  workItemKey: string;
+  sprintId: string;
+  weekIndex: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -191,5 +229,9 @@ export interface DomainDataset {
   stories: UserStory[];
   workItems: WorkItem[];
   dependencies: Dependency[];
+  /** Stored sprints, driving the Gantt Planner's sprint selector (§6a). */
+  sprints: Sprint[];
+  /** Human-authored week placements for the Gantt Planner (§6a). */
+  placements: PlannedPlacement[];
   settings: Setting[];
 }

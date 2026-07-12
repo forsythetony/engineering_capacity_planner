@@ -14,6 +14,7 @@ import type {
   EpicMilestone,
   IsoDate,
   Oncall,
+  PlannedPlacement,
   Pto,
   Setting,
   Team,
@@ -21,7 +22,7 @@ import type {
   VelocityOverride,
   Weekday,
 } from '@ecp/shared';
-import { SETTING_KEYS } from '@ecp/shared';
+import { diffDays, SETTING_KEYS } from '@ecp/shared';
 import type { Db } from './database.js';
 import { badRequest, conflict, notFound } from '../http-error.js';
 
@@ -454,4 +455,66 @@ export function deleteMilestone(db: Db, id: string): void {
     throw conflict('Cannot delete the gating milestone; mark another as gating first');
   }
   db.prepare('DELETE FROM epic_milestone WHERE id = ?').run(id);
+}
+
+// ---------------------------------------------------------------------------
+// Gantt Planner: week placements (project plan §6a)
+// ---------------------------------------------------------------------------
+
+const placementRow = (r: any): PlannedPlacement => ({
+  id: r.id,
+  workItemKey: r.work_item_key,
+  sprintId: r.sprint_id,
+  weekIndex: r.week_index,
+});
+
+/** Number of 7-day weeks a sprint spans (the last may be short). */
+function weekCount(startDate: IsoDate, endDate: IsoDate): number {
+  return Math.max(1, Math.ceil((diffDays(startDate, endDate) + 1) / 7));
+}
+
+/**
+ * Place a work item into a sprint week (or move it there). Idempotent per work
+ * item: the unique `work_item_key` means re-placing replaces the prior slot.
+ * Validates that the item and sprint exist and the week is within the sprint.
+ */
+export function upsertPlacement(
+  db: Db,
+  input: { workItemKey?: unknown; sprintId?: unknown; weekIndex?: unknown },
+): PlannedPlacement {
+  const workItemKey = assertNonEmptyString(input.workItemKey, 'workItemKey');
+  const sprintId = assertNonEmptyString(input.sprintId, 'sprintId');
+  const weekIndex = assertNumber(input.weekIndex, 'weekIndex', { int: true, min: 0 });
+
+  const item = db.prepare('SELECT key FROM work_item WHERE key = ?').get(workItemKey);
+  if (!item) throw notFound(`Work item ${workItemKey} not found`);
+  const sprint = db.prepare('SELECT * FROM sprint WHERE id = ?').get(sprintId) as
+    | { start_date: string; end_date: string }
+    | undefined;
+  if (!sprint) throw notFound(`Sprint ${sprintId} not found`);
+
+  const weeks = weekCount(sprint.start_date, sprint.end_date);
+  if (weekIndex >= weeks) {
+    throw badRequest(`weekIndex ${weekIndex} is out of range (sprint has ${weeks} week(s))`);
+  }
+
+  const existing = db
+    .prepare('SELECT id FROM planned_placement WHERE work_item_key = ?')
+    .get(workItemKey) as { id: string } | undefined;
+  const id = existing?.id ?? newId('pp');
+  db.prepare(
+    `INSERT INTO planned_placement (id, work_item_key, sprint_id, week_index)
+     VALUES (@id, @workItemKey, @sprintId, @weekIndex)
+     ON CONFLICT(work_item_key) DO UPDATE SET sprint_id = @sprintId, week_index = @weekIndex`,
+  ).run({ id, workItemKey, sprintId, weekIndex });
+
+  return placementRow(
+    db.prepare('SELECT * FROM planned_placement WHERE work_item_key = ?').get(workItemKey),
+  );
+}
+
+/** Remove a work item's placement (send it back to the backlog bag). */
+export function deletePlacement(db: Db, workItemKey: string): void {
+  const info = db.prepare('DELETE FROM planned_placement WHERE work_item_key = ?').run(workItemKey);
+  if (info.changes === 0) throw notFound(`No placement for work item ${workItemKey}`);
 }

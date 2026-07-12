@@ -1,11 +1,20 @@
 export { DEFAULT_ENGINE_CONFIG, type EngineConfig } from './config.js';
 export {
-  type Sprint,
+  type SprintWindow,
   sprintIndexFor,
   sprintByIndex,
   sprintFor,
   makeSprintCache,
 } from './calendar.js';
+export {
+  type WeekWindow,
+  type WeekVerdict,
+  type WeekPlan,
+  type WeeklyPlanInput,
+  sprintWeeks,
+  weekVerdict,
+  weeklyPlan,
+} from './week.js';
 export {
   type CapacityContext,
   type CapacityInputs,

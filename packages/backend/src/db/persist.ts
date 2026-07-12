@@ -44,13 +44,21 @@ export function writeDataset(db: Db, dataset: DomainDataset): void {
   const insertStory = db.prepare(
     `INSERT INTO user_story (key, epic_key, title) VALUES (@key, @epicKey, @title)`,
   );
+  const insertSprint = db.prepare(
+    `INSERT INTO sprint (id, team_id, name, start_date, end_date)
+     VALUES (@id, @teamId, @name, @startDate, @endDate)`,
+  );
   const insertWorkItem = db.prepare(
-    `INSERT INTO work_item (key, story_key, title, points, status, assignee_id)
-     VALUES (@key, @storyKey, @title, @points, @status, @assigneeId)`,
+    `INSERT INTO work_item (key, story_key, title, points, status, assignee_id, labels)
+     VALUES (@key, @storyKey, @title, @points, @status, @assigneeId, @labels)`,
   );
   const insertDependency = db.prepare(
     `INSERT INTO dependency (id, blocker_item_key, blocked_item_key)
      VALUES (@id, @blockerItemKey, @blockedItemKey)`,
+  );
+  const insertPlacement = db.prepare(
+    `INSERT INTO planned_placement (id, work_item_key, sprint_id, week_index)
+     VALUES (@id, @workItemKey, @sprintId, @weekIndex)`,
   );
   const insertSetting = db.prepare(
     `INSERT INTO settings (key, scope, scope_id, value)
@@ -67,11 +75,15 @@ export function writeDataset(db: Db, dataset: DomainDataset): void {
     for (const v of data.velocityOverrides) insertVelocity.run({ ...v, note: v.note ?? null });
     for (const p of data.pto) insertPto.run({ ...p, note: p.note ?? null });
     for (const o of data.oncall) insertOncall.run({ ...o, note: o.note ?? null });
+    for (const sp of data.sprints) insertSprint.run(sp);
     for (const e of data.epics) insertEpic.run(e);
     for (const ms of data.milestones) insertMilestone.run({ ...ms, isGating: bool(ms.isGating) });
     for (const s of data.stories) insertStory.run(s);
-    for (const w of data.workItems) insertWorkItem.run(w);
+    for (const w of data.workItems) {
+      insertWorkItem.run({ ...w, labels: JSON.stringify(w.labels ?? []) });
+    }
     for (const d of data.dependencies) insertDependency.run(d);
+    for (const p of data.placements) insertPlacement.run(p);
     for (const s of data.settings) {
       insertSetting.run({ ...s, scopeId: scopeIdToDb(s.scopeId) });
     }
@@ -163,6 +175,7 @@ export function readDataset(db: Db): DomainDataset {
         points: r.points,
         status: r.status,
         assigneeId: r.assignee_id,
+        labels: r.labels ? JSON.parse(r.labels) : [],
       })),
     dependencies: db
       .prepare('SELECT * FROM dependency')
@@ -171,6 +184,25 @@ export function readDataset(db: Db): DomainDataset {
         id: r.id,
         blockerItemKey: r.blocker_item_key,
         blockedItemKey: r.blocked_item_key,
+      })),
+    sprints: db
+      .prepare('SELECT * FROM sprint')
+      .all()
+      .map((r: any) => ({
+        id: r.id,
+        teamId: r.team_id,
+        name: r.name,
+        startDate: r.start_date,
+        endDate: r.end_date,
+      })),
+    placements: db
+      .prepare('SELECT * FROM planned_placement')
+      .all()
+      .map((r: any) => ({
+        id: r.id,
+        workItemKey: r.work_item_key,
+        sprintId: r.sprint_id,
+        weekIndex: r.week_index,
       })),
     settings: db
       .prepare('SELECT * FROM settings')

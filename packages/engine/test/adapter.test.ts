@@ -30,6 +30,8 @@ function fixture(settings: Setting[] = defaultGlobalSettings()): DomainDataset {
       { key: 'CKT-1', storyKey: 'CKT-S1', title: 'x', points: 10, status: 'To Do', assigneeId: 'M1' },
     ],
     dependencies: [],
+    sprints: [],
+    placements: [],
     settings,
   };
 }
