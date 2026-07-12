@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { EpicScope, Scenario } from '../lib/projection';
 import { buildGraphLayout, type LayoutEdge, type LayoutNode } from '../lib/graph';
+import { JIRA_ICON_PATHS } from './JiraLink';
 
 interface DependencyGraphProps {
   scope: EpicScope;
@@ -9,18 +10,34 @@ interface DependencyGraphProps {
 
 /**
  * Dependencies tab (project plan §6): a left-to-right flowchart of the epic's
- * tickets with "blocked by" edges, high-leverage blockers highlighted, plus a
- * ranked list of the tickets that unblock the most downstream work so the team
- * knows what to pick up next. Cut/done state from the timeline scenario is
- * reflected here so both tabs tell the same story.
+ * tickets with "blocked by" edges, high-leverage blockers highlighted, and a
+ * ranked list of the tickets that unblock the most downstream work. Clicking a
+ * node focuses the graph on that ticket's connected subtree — what unblocks it
+ * and what it unblocks. Cut/done state from the timeline scenario is reflected
+ * here so both tabs tell the same story.
  */
 export function DependencyGraph({ scope, scenario }: DependencyGraphProps) {
-  const layout = useMemo(() => buildGraphLayout(scope, scenario), [scope, scenario]);
+  const [focusKey, setFocusKey] = useState<string | null>(null);
+  const layout = useMemo(
+    () => buildGraphLayout(scope, scenario, focusKey),
+    [scope, scenario, focusKey],
+  );
   const { nodes, edges, width, height, analysis } = layout;
 
-  const topBlockers = analysis.leaderboard.filter((n) => n.transitiveDependents > 0).slice(0, 5);
+  const toggleFocus = (key: string) => setFocusKey((prev) => (prev === key ? null : key));
 
-  if (nodes.length === 0) {
+  // The leaderboard is always ranked over the whole epic, not the focused view.
+  const fullLeaderboard = useMemo(
+    () => buildGraphLayout(scope, scenario, null).analysis.leaderboard,
+    [scope, scenario],
+  );
+  const topBlockers = fullLeaderboard.filter((n) => n.transitiveDependents > 0).slice(0, 5);
+  const titleByKey = useMemo(
+    () => new Map(scope.workItems.map((w) => [w.key, w.title])),
+    [scope],
+  );
+
+  if (scope.workItems.length === 0) {
     return (
       <div className="panel" data-testid="dependency-graph">
         <div className="section-title">
@@ -37,10 +54,28 @@ export function DependencyGraph({ scope, scenario }: DependencyGraphProps) {
         <div className="section-title">
           <h2>Dependency graph</h2>
           <span className="hint">
-            Arrows point from a blocker to the work it unblocks. Highlighted tickets free the most
-            downstream work.
+            {focusKey
+              ? 'Showing one ticket’s dependency neighbourhood. Click another node to jump, or “Show all”.'
+              : 'Arrows point from a blocker to the work it unblocks. Click a ticket to focus on its subtree.'}
           </span>
         </div>
+
+        {focusKey && (
+          <div className="graph-focus-banner" data-testid="graph-focus-banner">
+            <span>
+              Focused on <strong>{focusKey}</strong> — {nodes.length} ticket
+              {nodes.length === 1 ? '' : 's'} in its subtree (blockers + what it unblocks).
+            </span>
+            <button
+              type="button"
+              className="btn"
+              data-testid="graph-show-all"
+              onClick={() => setFocusKey(null)}
+            >
+              Show all
+            </button>
+          </div>
+        )}
 
         {analysis.hasCycle && (
           <div className="graph-warning" data-testid="graph-cycle-warning">
@@ -79,7 +114,7 @@ export function DependencyGraph({ scope, scenario }: DependencyGraphProps) {
               <EdgePath key={e.id} edge={e} />
             ))}
             {nodes.map((n) => (
-              <GraphNode key={n.key} node={n} />
+              <GraphNode key={n.key} node={n} onFocus={toggleFocus} />
             ))}
           </svg>
         </div>
@@ -93,12 +128,19 @@ export function DependencyGraph({ scope, scenario }: DependencyGraphProps) {
         <ol className="leverage-list" data-testid="leverage-list">
           {topBlockers.map((n) => (
             <li key={n.key} data-testid={`leverage-${n.key}`}>
-              <span className="badge high-leverage">unblocks {n.transitiveDependents}</span>
-              <strong>{n.key}</strong>
-              <span className="leverage-title">{layout.nodes.find((x) => x.key === n.key)!.title}</span>
-              <span className="hint">
-                {n.directDependents} direct · {n.transitiveDependents} total
-              </span>
+              <button
+                type="button"
+                className="leverage-row"
+                onClick={() => setFocusKey(n.key)}
+                title={`Focus the graph on ${n.key}`}
+              >
+                <span className="badge high-leverage">unblocks {n.transitiveDependents}</span>
+                <strong>{n.key}</strong>
+                <span className="leverage-title">{titleByKey.get(n.key)}</span>
+                <span className="hint">
+                  {n.directDependents} direct · {n.transitiveDependents} total
+                </span>
+              </button>
             </li>
           ))}
         </ol>
@@ -140,15 +182,18 @@ function EdgePath({ edge }: { edge: LayoutEdge }) {
   );
 }
 
-function GraphNode({ node }: { node: LayoutNode }) {
+function GraphNode({ node, onFocus }: { node: LayoutNode; onFocus: (key: string) => void }) {
   const className = [
     'graph-node',
     `tier-${node.tier}`,
     node.done ? 'is-done' : '',
     node.cut ? 'is-cut' : '',
+    node.focused ? 'is-focused' : '',
   ]
     .filter(Boolean)
     .join(' ');
+
+  const metrics = node.transitiveDependents > 0 ? `${node.points}p · ↳${node.transitiveDependents}` : `${node.points}p`;
 
   return (
     <g
@@ -156,6 +201,7 @@ function GraphNode({ node }: { node: LayoutNode }) {
       transform={`translate(${node.x}, ${node.y})`}
       data-testid={`graph-node-${node.key}`}
       data-tier={node.tier}
+      onClick={() => onFocus(node.key)}
     >
       <title>
         {node.key} — {node.title}
@@ -166,21 +212,48 @@ function GraphNode({ node }: { node: LayoutNode }) {
         {node.directDependents} direct)
       </title>
       <rect width={node.width} height={node.height} rx={9} className="node-box" />
-      <text x={10} y={20} className="node-key">
+      <text x={10} y={21} className="node-key">
         {node.key}
         {node.done ? ' ✓' : ''}
       </text>
-      <text x={10} y={38} className="node-title">
-        {truncate(node.title, 20)}
+      <text x={10} y={39} className="node-title">
+        {truncate(node.title, 17)}
       </text>
-      <text x={node.width - 10} y={20} className="node-points" textAnchor="end">
-        {node.points}p
+      <text x={node.width - 10} y={39} className="node-metrics" textAnchor="end">
+        {metrics}
       </text>
-      {node.transitiveDependents > 0 && (
-        <text x={node.width - 10} y={38} className="node-leverage" textAnchor="end">
-          ↳ {node.transitiveDependents}
-        </text>
-      )}
+      <NodeJiraLink jiraKey={node.key} x={node.width - 24} y={8} />
+    </g>
+  );
+}
+
+/** The shared Jira glyph, rendered inline in an SVG node (inert for now). */
+function NodeJiraLink({ jiraKey, x, y }: { jiraKey: string; x: number; y: number }) {
+  const scale = 14 / 24;
+  return (
+    <g
+      className="node-jira jira-link inert"
+      transform={`translate(${x}, ${y}) scale(${scale})`}
+      role="link"
+      aria-label={`Open ${jiraKey} in Jira`}
+      data-testid={`jira-link-${jiraKey}`}
+      // The icon is inert; swallow the click so it doesn't also focus the node.
+      onClick={(e) => e.stopPropagation()}
+    >
+      <title>{`Open ${jiraKey} in Jira (not yet linked)`}</title>
+      {/* Invisible hit target so the whole glyph box is clickable. */}
+      <rect x={-2} y={-2} width={28} height={28} fill="transparent" />
+      {JIRA_ICON_PATHS.map((d) => (
+        <path
+          key={d}
+          d={d}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ))}
     </g>
   );
 }

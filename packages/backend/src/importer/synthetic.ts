@@ -19,9 +19,12 @@ import {
   addDays,
   CADENCE_DEFAULTS,
   defaultGlobalSettings,
+  ENGINE_DEFAULTS,
   getWeekday,
+  isWorkingDay,
   SETTING_KEYS,
 } from '@ecp/shared';
+import { project } from '@ecp/engine';
 import { Rng } from './rng.js';
 
 export interface SyntheticConfig {
@@ -37,7 +40,12 @@ export interface SyntheticConfig {
    * is fully reproducible.
    */
   today?: IsoDate;
-  /** The gating "First QA in stage pass" target date the plan leads up to. */
+  /**
+   * The gating "First QA in stage pass" target date the plan leads up to. When
+   * omitted it is *calibrated* to the projected dev-complete date (see
+   * {@link CALIBRATED_BUFFER_WORKING_DAYS}) so the default scenario opens in the
+   * yellow band rather than at an arbitrary verdict.
+   */
   gatingDate?: IsoDate;
 }
 
@@ -45,10 +53,17 @@ const DEFAULTS = {
   seed: 1,
   targetWorkItemCount: 50,
   storyCount: 10,
-  // Planning as of Sun Jul 12, 2026 toward a target of Tue Jul 28, 2026.
+  // Planning as of Sun Jul 12, 2026; the gating day is calibrated from here.
   today: '2026-07-12',
-  gatingDate: '2026-07-28',
 } as const;
+
+/**
+ * When the gating date is calibrated (not supplied), place it this many working
+ * days *after* the projected dev-complete date. The value sits inside the
+ * default green buffer threshold ({@link ENGINE_DEFAULTS.GREEN_MIN_BUFFER_DAYS}),
+ * so the epic opens in the **yellow** band: on track, but eating into buffer.
+ */
+const CALIBRATED_BUFFER_WORKING_DAYS = 2;
 
 /** Number of leading "foundation" work items that many others depend on. */
 const FOUNDATION_COUNT = 3;
@@ -125,7 +140,6 @@ export function generateSyntheticDataset(config: SyntheticConfig = {}): DomainDa
   const targetWorkItemCount = config.targetWorkItemCount ?? DEFAULTS.targetWorkItemCount;
   const storyCount = config.storyCount ?? DEFAULTS.storyCount;
   const today = config.today ?? DEFAULTS.today;
-  const gatingDate = config.gatingDate ?? DEFAULTS.gatingDate;
   const rng = new Rng(seed);
 
   // The sprint anchor is the most recent sprint-start weekday on/before today,
@@ -193,36 +207,12 @@ export function generateSyntheticDataset(config: SyntheticConfig = {}): DomainDa
     },
   ];
 
-  // --- Epic & milestones ("relevant days") --------------------------------
+  // --- Epic ----------------------------------------------------------------
   const epic: Epic = {
     key: EPIC_KEY,
     title: 'Checkout Revamp',
     teamId: team.id,
   };
-
-  const milestones: EpicMilestone[] = [
-    {
-      id: 'MS1',
-      epicKey: EPIC_KEY,
-      name: 'Feature freeze',
-      date: addDays(gatingDate, -5),
-      isGating: false,
-    },
-    {
-      id: 'MS2',
-      epicKey: EPIC_KEY,
-      name: 'First QA in stage pass',
-      date: gatingDate,
-      isGating: true, // exactly one gating milestone drives the verdict
-    },
-    {
-      id: 'MS3',
-      epicKey: EPIC_KEY,
-      name: 'Launch',
-      date: addDays(gatingDate, 14),
-      isGating: false,
-    },
-  ];
 
   // --- User stories --------------------------------------------------------
   const stories: UserStory[] = [];
@@ -272,6 +262,45 @@ export function generateSyntheticDataset(config: SyntheticConfig = {}): DomainDa
   // --- Dependency web (a DAG; blocker index always < blocked index) --------
   const dependencies = buildDependencies(workItems, rng);
 
+  // --- Milestones ("relevant days"), calibrated to the projection ----------
+  // The gating day is placed just after the projected dev-complete date so the
+  // default scenario opens in the yellow band (unless a date is supplied).
+  const gatingDate =
+    config.gatingDate ??
+    calibrateGatingDate({
+      today,
+      team,
+      members,
+      pto,
+      oncall,
+      velocityOverrides,
+      workItems,
+    });
+
+  const milestones: EpicMilestone[] = [
+    {
+      id: 'MS1',
+      epicKey: EPIC_KEY,
+      name: 'Feature freeze',
+      date: addDays(gatingDate, -5),
+      isGating: false,
+    },
+    {
+      id: 'MS2',
+      epicKey: EPIC_KEY,
+      name: 'First QA in stage pass',
+      date: gatingDate,
+      isGating: true, // exactly one gating milestone drives the verdict
+    },
+    {
+      id: 'MS3',
+      epicKey: EPIC_KEY,
+      name: 'Launch',
+      date: addDays(gatingDate, 14),
+      isGating: false,
+    },
+  ];
+
   return {
     teams: [team],
     members,
@@ -285,6 +314,40 @@ export function generateSyntheticDataset(config: SyntheticConfig = {}): DomainDa
     dependencies,
     settings: [...defaultGlobalSettings(), planningTodaySetting(today)],
   };
+}
+
+/**
+ * Pick a gating date that makes the default projection land in the yellow band:
+ * run the pure engine on the generated backlog to find the projected
+ * dev-complete date, then step forward {@link CALIBRATED_BUFFER_WORKING_DAYS}
+ * working days. That leaves a small positive buffer — below the green
+ * threshold, so "on track, but tight". Falls back to a fixed offset if the work
+ * is unreachable within the projection horizon.
+ */
+function calibrateGatingDate(inputs: {
+  today: IsoDate;
+  team: Team;
+  members: TeamMember[];
+  pto: Pto[];
+  oncall: Oncall[];
+  velocityOverrides: VelocityOverride[];
+  workItems: WorkItem[];
+}): IsoDate {
+  const projected = project({
+    ...inputs,
+    // Placeholder: the gating date does not affect the projected date itself.
+    gatingDate: inputs.today,
+    config: { oncallMultiplier: ENGINE_DEFAULTS.ONCALL_MULTIPLIER },
+  }).projectedDevCompleteDate;
+
+  if (projected === null) return addDays(inputs.today, 28);
+
+  let date = projected;
+  for (let added = 0; added < CALIBRATED_BUFFER_WORKING_DAYS; ) {
+    date = addDays(date, 1);
+    if (isWorkingDay(date, inputs.team.workingDays)) added++;
+  }
+  return date;
 }
 
 /** The most recent date on/before `date` that falls on `weekday`. */

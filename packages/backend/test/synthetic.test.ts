@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SETTING_KEYS, type DomainDataset } from '@ecp/shared';
+import { projectEpicFromDataset } from '@ecp/engine';
 import { generateSyntheticDataset, SyntheticImporter } from '../src/importer/synthetic.js';
 
 const gen = (overrides = {}): DomainDataset => generateSyntheticDataset(overrides);
@@ -170,6 +171,23 @@ describe('generateSyntheticDataset', () => {
     const anchor = data.teams[0]!.sprintAnchorDate;
     const gating = data.milestones.find((m) => m.isGating)!;
     expect(gating.date > anchor).toBe(true);
+  });
+
+  it('calibrates the default scenario to open in the yellow band', () => {
+    const data = gen();
+    const today = JSON.parse(
+      data.settings.find((s) => s.key === SETTING_KEYS.PLANNING_TODAY)!.value,
+    ) as string;
+    const result = projectEpicFromDataset(data, data.epics[0]!.key, today);
+    // "On track, but tight": finishes before the gating day, inside the buffer.
+    expect(result.verdict).toBe('yellow');
+    expect(result.bufferWorkingDays).toBeGreaterThanOrEqual(0);
+    expect(result.bufferWorkingDays).toBeLessThan(5); // default green threshold
+  });
+
+  it('honours an explicit gating date instead of calibrating', () => {
+    const data = gen({ gatingDate: '2027-01-01' });
+    expect(data.milestones.find((m) => m.isGating)!.date).toBe('2027-01-01');
   });
 });
 

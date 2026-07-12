@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { DomainDataset, WorkItem } from '@ecp/shared';
-import { buildGraphLayout, GRAPH_GEOMETRY, leverageTier, nodeState } from '../src/lib/graph';
+import {
+  buildGraphLayout,
+  GRAPH_GEOMETRY,
+  leverageTier,
+  nodeState,
+  subtreeKeys,
+} from '../src/lib/graph';
 import { scopeEpic, type Scenario } from '../src/lib/projection';
 import { loadBundledDataset } from '../src/data/loadDataset';
 
@@ -95,6 +101,58 @@ describe('buildGraphLayout — over the bundled fixture', () => {
 
   it('is acyclic for the synthetic dataset', () => {
     expect(layout.analysis.hasCycle).toBe(false);
+  });
+});
+
+describe('subtreeKeys', () => {
+  // A → B → D, A → C, plus E (blocks nothing near B).  D also blocked by C.
+  const deps = [
+    { blockerItemKey: 'A', blockedItemKey: 'B' },
+    { blockerItemKey: 'B', blockedItemKey: 'D' },
+    { blockerItemKey: 'A', blockedItemKey: 'C' },
+    { blockerItemKey: 'C', blockedItemKey: 'D' },
+    { blockerItemKey: 'X', blockedItemKey: 'Y' }, // unrelated component
+  ];
+
+  it('includes the node, its transitive blockers, and its transitive dependents', () => {
+    // B: blocker chain up = {A}; unblocks down = {D}. Plus B itself.
+    expect(subtreeKeys(deps, 'B')).toEqual(new Set(['B', 'A', 'D']));
+  });
+
+  it('for a root, returns the whole reachable downstream', () => {
+    expect(subtreeKeys(deps, 'A')).toEqual(new Set(['A', 'B', 'C', 'D']));
+  });
+
+  it('for a leaf, returns all of its upstream blockers', () => {
+    expect(subtreeKeys(deps, 'D')).toEqual(new Set(['D', 'B', 'C', 'A']));
+  });
+
+  it('excludes unrelated components', () => {
+    expect(subtreeKeys(deps, 'B').has('X')).toBe(false);
+  });
+});
+
+describe('buildGraphLayout — focus mode', () => {
+  it('restricts nodes to the focused ticket’s subtree and flags it', () => {
+    const top = buildGraphLayout(scope, emptyScenario()).analysis.leaderboard[0]!;
+    const focused = buildGraphLayout(scope, emptyScenario(), top.key);
+
+    const expected = subtreeKeys(scope.dependencies, top.key);
+    expect(new Set(focused.nodes.map((n) => n.key))).toEqual(expected);
+    expect(focused.focusKey).toBe(top.key);
+    expect(focused.nodes.find((n) => n.key === top.key)!.focused).toBe(true);
+    // Every edge stays inside the subtree.
+    for (const e of focused.edges) {
+      expect(expected.has(e.from)).toBe(true);
+      expect(expected.has(e.to)).toBe(true);
+    }
+  });
+
+  it('ignores an unknown focus key and shows the whole epic', () => {
+    const full = buildGraphLayout(scope, emptyScenario());
+    const bogus = buildGraphLayout(scope, emptyScenario(), 'NOPE-999');
+    expect(bogus.nodes).toHaveLength(full.nodes.length);
+    expect(bogus.focusKey).toBeNull();
   });
 });
 

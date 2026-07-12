@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { DomainDataset } from '@ecp/shared';
 import { Controls } from './components/Controls';
 import { DependencyGraph } from './components/DependencyGraph';
+import { JiraLink } from './components/JiraLink';
 import { StatusStrip } from './components/StatusStrip';
 import { Timeline } from './components/Timeline';
 import { WorkItemList } from './components/WorkItemList';
@@ -75,7 +76,10 @@ function Planner({ dataset, source }: { dataset: DomainDataset; source: DatasetS
         <div>
           <h1>Engineering Capacity Planner</h1>
           <div className="epic-title">
-            {scope.epic.key} — {scope.epic.title} · {scope.team.name}
+            {scope.epic.key} — {scope.epic.title}
+            <JiraLink jiraKey={scope.epic.key} />
+            {' · '}
+            {scope.team.name}
           </div>
         </div>
         <nav className="tabs">
