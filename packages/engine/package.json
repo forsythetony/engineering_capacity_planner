@@ -1,5 +1,5 @@
 {
-  "name": "@ecp/shared",
+  "name": "@ecp/engine",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -16,6 +16,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@ecp/shared": "*"
   },
   "devDependencies": {
     "typescript": "^5.7.3",

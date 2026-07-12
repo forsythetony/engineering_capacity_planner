@@ -7,4 +7,3 @@ export {
   type SyntheticConfig,
 } from './importer/synthetic.js';
 export { Rng } from './importer/rng.js';
-export { addDays, parseIso, formatIso } from './util/dates.js';
