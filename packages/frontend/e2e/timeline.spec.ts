@@ -19,7 +19,7 @@ test.describe('Calendar / timeline tab', () => {
     await expect(page.getByTestId('marker-devcomplete')).toBeVisible();
   });
 
-  test('recomputes live: cutting the backlog and adjusting the threshold', async ({ page }) => {
+  test('recomputes live: cutting the backlog turns the verdict green', async ({ page }) => {
     await page.goto('/');
     const strip = page.getByTestId('status-strip');
     const remaining = page.getByTestId('remaining-points');
@@ -32,14 +32,6 @@ test.describe('Calendar / timeline tab', () => {
       await cutButtons.first().click();
     }
     await expect(remaining).toHaveText('0');
-    await expect(strip).toHaveAttribute('data-verdict', 'green');
-
-    // Demanding an impossibly large buffer downgrades it live…
-    await page.getByTestId('green-min-input').fill('999');
-    await expect(strip).not.toHaveAttribute('data-verdict', 'green');
-
-    // …and relaxing the threshold brings it back to green.
-    await page.getByTestId('green-min-input').fill('0');
     await expect(strip).toHaveAttribute('data-verdict', 'green');
   });
 });

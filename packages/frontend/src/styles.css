@@ -302,10 +302,6 @@ button.tab:hover:not(.active) {
   padding: 7px 9px;
   font-size: 13px;
 }
-.control .range-value {
-  font-variant-numeric: tabular-nums;
-  color: var(--text);
-}
 .btn {
   background: var(--panel-2);
   border: 1px solid var(--border);

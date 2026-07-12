@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { DomainDataset } from '@ecp/shared';
 import { Configuration } from './components/Configuration';
-import { Controls } from './components/Controls';
 import { DependencyGraph } from './components/DependencyGraph';
 import { JiraLink } from './components/JiraLink';
 import { StatusStrip } from './components/StatusStrip';
@@ -63,23 +62,32 @@ function Planner({
   const epicKey = dataset.epics[0]!.key;
   const scope = useMemo(() => scopeEpic(dataset, epicKey), [dataset, epicKey]);
 
-  const initialScenario = (): Scenario => ({
-    // Demo data pins a reproducible "today"; real data uses the actual date.
-    today: scope.planningToday ?? currentIsoDate(),
-    cutItemKeys: new Set(),
-    doneItemKeys: new Set(),
-    greenMinBufferDays: scope.defaults.greenMinBufferDays,
-    oncallMultiplier: scope.defaults.oncallMultiplier,
-  });
+  // Cuts and mark-done are the only timeline-local scenario edits now that the
+  // planning knobs (today / green-buffer / on-call) live on the Configuration
+  // tab. Those values are read straight from the persisted defaults below so the
+  // timeline always reflects the current configuration, including after a save.
+  const [selection, setSelection] = useState<{
+    cutItemKeys: Set<string>;
+    doneItemKeys: Set<string>;
+  }>(() => ({ cutItemKeys: new Set(), doneItemKeys: new Set() }));
 
-  const [scenario, setScenario] = useState<Scenario>(initialScenario);
+  const scenario = useMemo<Scenario>(
+    () => ({
+      // Demo data pins a reproducible "today"; real data uses the actual date.
+      today: scope.planningToday ?? currentIsoDate(),
+      cutItemKeys: selection.cutItemKeys,
+      doneItemKeys: selection.doneItemKeys,
+      greenMinBufferDays: scope.defaults.greenMinBufferDays,
+      oncallMultiplier: scope.defaults.oncallMultiplier,
+    }),
+    [scope, selection],
+  );
+
   const [tab, setTab] = useState<'timeline' | 'dependencies' | 'configuration'>('timeline');
   const result = useMemo(() => runScenario(scope, scenario), [scope, scenario]);
 
-  const patch = (p: Partial<Scenario>) => setScenario((s) => ({ ...s, ...p }));
-
-  const toggleInSet = (key: keyof Pick<Scenario, 'cutItemKeys' | 'doneItemKeys'>, itemKey: string) =>
-    setScenario((s) => {
+  const toggleInSet = (key: 'cutItemKeys' | 'doneItemKeys', itemKey: string) =>
+    setSelection((s) => {
       const next = new Set(s[key]);
       if (next.has(itemKey)) next.delete(itemKey);
       else next.add(itemKey);
@@ -140,14 +148,6 @@ function Planner({
               Gating relevant day: <strong>{scope.gating.name}</strong> on{' '}
               {formatDate(scope.gating.date)}. The projection re-runs on every change below.
             </p>
-          </div>
-
-          <div className="panel">
-            <Controls
-              scenario={scenario}
-              onChange={patch}
-              onReset={() => setScenario(initialScenario())}
-            />
           </div>
 
           <div className="panel">
