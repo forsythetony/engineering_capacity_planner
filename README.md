@@ -1,146 +1,46 @@
 # Engineering Capacity Planner
 
+# Overview
+
 A local, single-user sprint-planning tool that answers one question well:
 **"Given today's date and the work remaining, are our promised QA / testing /
 launch dates still realistic?"**
 
 It pulls epic/story data into a local SQLite database, layers on team-capacity
-inputs (per-member velocity, PTO, on-call), and renders a red/yellow/green
-timeline against each epic's gating "relevant day."
+inputs (per-member velocity, PTO, on-call), and renders a **red/yellow/green**
+timeline against each epic's gating "relevant day." It runs entirely on your
+machine; the SQLite file is the shareable unit.
 
-See [`docs/sprint-planning-tool-project-plan.md`](docs/sprint-planning-tool-project-plan.md)
-for the full spec.
+**Why it's useful:** Jira tracks tickets but doesn't reason about your team's
+actual capacity over calendar time. This tool does the math Jira won't —
+remaining points ÷ realistic capacity (adjusted for PTO, on-call drag, and
+per-person velocity) projected against real dates.
 
-## Milestone 1 (Phases 1–3)
+**Architecture** — a monorepo of small packages, everything behind a
+**pluggable importer interface** so a real Jira adapter can drop in later
+without touching the engine or UI:
 
-The first milestone proves the core hypothesis: **synthetic data → capacity
-engine → colored timeline**. It is built in independently reviewable phases,
-one pull request each.
-
-| Phase | Scope | Status |
-| ----- | ----- | ------ |
-| **1** | Data model + synthetic importer | ✅ merged |
-| **2** | Capacity engine + exhaustive unit tests | ✅ merged |
-| **3** | Calendar / timeline UI (red/yellow/green) | ✅ this PR |
-
-Milestone 1 is complete with this PR.
-
-## Stack
-
-- **Monorepo** via npm workspaces.
-- **`@ecp/shared`** — TypeScript domain model, the importer contract, pure
-  date/calendar helpers, and the configurable settings/defaults. Consumed by
-  the engine, the backend, and the UI (Phase 3).
+- **`@ecp/shared`** — domain model, the importer contract, pure date/calendar
+  helpers, and configurable settings/defaults.
 - **`@ecp/engine`** — the pure, dependency-free capacity/feasibility engine.
-  Projects a dev-complete date and returns a red/yellow/green verdict. No DB,
-  no UI, no runtime dependencies beyond `@ecp/shared` types/helpers.
-- **`@ecp/backend`** — Node + TypeScript. SQLite via `better-sqlite3`, a
-  minimal Fastify API, and the `SyntheticImporter`. Tests run on
-  [Vitest](https://vitest.dev).
-- **`@ecp/frontend`** — React + TypeScript + Vite. The Calendar/Timeline tab.
-  Runs the pure engine in the browser for instant what-if recompute. Logic
-  tested with Vitest, driven end-to-end with [Playwright](https://playwright.dev).
+  Projects a dev-complete date and returns the red/yellow/green verdict. No DB,
+  no UI, no I/O.
+- **`@ecp/backend`** — Node + TypeScript. SQLite via `better-sqlite3`, a minimal
+  Fastify API, and the importers (synthetic now, Jira later).
+- **`@ecp/frontend`** — React + TypeScript + Vite. The Calendar/Timeline tab;
+  runs the engine in the browser for instant what-if recompute.
 
-Everything sits behind a **pluggable importer interface** so a real Jira
-adapter can drop in later (Phase 7) without touching the engine or UI.
+Tooling: [Vitest](https://vitest.dev) for unit tests,
+[Playwright](https://playwright.dev) for e2e. Requires **Node ≥ 20** (developed
+on 22; see `.nvmrc`).
 
-## What Phase 1 delivers
+# Getting Started
 
-- **Domain schema** (`packages/shared/src/domain.ts`) — teams & cadence,
-  roster, PTO, on-call, velocity overrides, epics, "relevant day" milestones,
-  stories, work items, dependencies, and a key/value settings store.
-- **SQLite schema + persistence** (`packages/backend/src/db`) — foreign keys
-  enforced, transactional writes, lossless read/write round-trip.
-- **`SyntheticImporter`** (`packages/backend/src/importer`) — a deterministic,
-  seedable generator producing a ~50-item epic grouped under user stories with
-  varied points/statuses/assignees and a dependency web that includes a few
-  high-leverage blockers. Always a DAG.
-- **Configurable knobs** — sprint cadence (default 2-week sprints starting
-  Tuesday, Mon–Fri), on-call multiplier (0.5), and green/yellow/red buffer
-  thresholds live in the settings store with sensible defaults. Jira mapping
-  fields are present but inert.
-
-## What Phase 2 delivers
-
-The **capacity / feasibility engine** (`packages/engine`) — a pure,
-dependency-free module, the highest-value part of the app.
-
-- **Projection** — walks forward one working day at a time from `today`,
-  accumulating each day's team throughput until the remaining points are
-  covered, to produce a **projected dev-complete date**.
-- **Capacity model** — a member's per-sprint velocity is spread across the
-  sprint's working days and scaled by availability: `0` on PTO, the on-call
-  multiplier when on call, and any velocity-override multiplier — composed
-  multiplicatively. Inactive members contribute nothing. A partial
-  (already-underway) sprint only contributes its remaining days.
-- **Verdict** — `buffer = workingDaysBetween(devComplete, gatingDate)`, then
-  **green** (buffer ≥ `green_min_buffer_days`), **yellow** (`0 ≤ buffer <
-  green_min`), **red** (buffer `< 0`, or the work can't finish within the
-  horizon), each with a human-readable reason.
-- **Configurable** — sprint cadence, on-call multiplier, and the buffer
-  thresholds are all inputs; nothing is hard-coded.
-- **Pure & exhaustively tested** — no DB, no UI, no I/O. Given identical inputs
-  it returns an identical result, covering green/yellow/red edges, buffer sign,
-  PTO/on-call/override effects, cadence differences, cut-ticket recalculation,
-  and the infeasible case.
-
-```ts
-import { project } from '@ecp/engine';
-
-const result = project({
-  today: '2026-01-06',
-  team,               // cadence + working days
-  members, pto, oncall, velocityOverrides,
-  workItems,          // remaining points derived from statuses
-  gatingDate: '2026-03-02',
-  config: { greenMinBufferDays: 5, oncallMultiplier: 0.5 },
-});
-// → { projectedDevCompleteDate, bufferWorkingDays, verdict, reason, sprints }
-```
-
-`projectEpicFromDataset(dataset, epicKey, today)` is a thin bridge that pulls
-the epic's team, gating milestone, work items, and settings out of a full
-`DomainDataset` and calls the pure core.
-
-## What Phase 3 delivers
-
-The **Calendar / Timeline tab** (`packages/frontend`) — the colored timeline
-that answers the core question at a glance (project plan §6).
-
-- **Status strip** — a green/yellow/red banner with the verdict ("On track" /
-  "At risk" / "Off track"), the engine's reasoning, and headline metrics
-  (projected dev-complete, buffer in working days, points remaining).
-- **Timeline** — a horizontal axis with a **today** marker, a marker for each
-  of the epic's relevant days (the **gating** one highlighted), the
-  **dev-complete** marker colored by verdict, a buffer band between
-  dev-complete and the gating day, month ticks, and per-sprint capacity bands.
-- **Live recompute** — editing `today`, the green buffer threshold, or the
-  on-call multiplier, and **cutting a ticket** or **marking it done**, re-runs
-  the projection instantly. The pure `@ecp/engine` runs **in the browser**, so
-  what-if changes are immediate with no round-trip.
-- **Data** — the UI fetches the dataset from the backend API
-  (`GET /api/dataset`) and **falls back to a bundled synthetic sample** when the
-  backend isn't running (so it also runs with zero setup and is e2e-testable
-  standalone). A small indicator shows which source is live. In dev, Vite
-  proxies `/api` to the backend, so the browser fetches same-origin.
-
-```bash
-npm run dev              # backend (Fastify :3001) + frontend (Vite :5173) together
-# → open http://localhost:5173 ; the header shows "● Live data from backend API"
-
-npm run dev:frontend     # frontend only (uses the bundled sample fallback)
-npm run export:fixture   # regenerate the bundled fallback dataset
-npm run e2e              # Playwright e2e (drives the timeline in Chromium)
-```
-
-The backend seeds an empty database with synthetic data on startup, so
-`npm run dev` needs no separate seed step.
-
-## Configuration
+## Configuration Setup
 
 Nothing environment-specific is hardcoded. All config comes from environment
-variables (one `.env` at the repo root serves both the backend and the Vite
-frontend). Copy the template and edit:
+variables, and a single `.env` at the repo root serves both the backend and the
+Vite frontend. Copy the template and edit:
 
 ```bash
 cp .env.example .env
@@ -155,36 +55,67 @@ An empty `.env` runs the app on synthetic data. Key knobs:
 | `ECP_CORS_ORIGIN` | `*` | `Access-Control-Allow-Origin` for the API |
 | `ECP_DATA_SOURCE` | `synthetic` | `synthetic` or `jira` |
 | `ECP_SEED_IF_EMPTY` | `true` | Import from the source if the DB is empty on startup |
+| `ECP_SYNTHETIC_SEED` | `1` | Deterministic seed for the synthetic generator |
 | `VITE_PORT` / `VITE_API_TARGET` | `5173` / `http://127.0.0.1:3001` | Dev server + proxy target |
 | `JIRA_*` | — | Jira connection + mapping (used when `ECP_DATA_SOURCE=jira`) |
 
-**Pointing at Jira (Phase 7):** set `ECP_DATA_SOURCE=jira` and fill the `JIRA_*`
-values (base URL, email, API token, project key, story-points field, "blocks"
-link type). The importer is selected by config alone — no code change — and
-fails fast with the exact missing variables until Phase 7 lands its `fetch()`.
+**Pointing at Jira** (importer lands in Phase 7): set `ECP_DATA_SOURCE=jira` and
+fill the `JIRA_*` values (base URL, email, API token, project key, story-points
+field, "blocks" link type). The importer is selected by config alone — no code
+change — and fails fast listing the exact missing variables until Phase 7 lands
+its `fetch()`.
 
 **Security:** the SQLite database is the shareable unit, so **secrets never
-touch it**. The Jira API token lives only in the environment / `.env`.
+touch it**. The Jira API token lives only in the environment / `.env` (which is
+gitignored).
 
-## Getting started
+## Installing Dependencies
 
 ```bash
-npm install          # installs workspaces (builds better-sqlite3 native addon)
-npm run build        # type-check + emit
-npm test             # run all Vitest suites
+nvm use              # optional — selects Node 22 from .nvmrc
+npm install          # installs all workspaces (builds the better-sqlite3 native addon)
 ```
 
-### Seed and inspect a database
+## Running the App
 
-Phase 1 is verifiable via DB inspection. This script generates the synthetic
-epic, writes it to SQLite, reads it back, and prints a summary:
+```bash
+npm run dev          # backend (Fastify :3001) + frontend (Vite :5173) together
+# → open http://localhost:5173 ; the header shows "● Live data from backend API"
+```
+
+The backend imports from the configured source into an empty database on
+startup, so `npm run dev` needs no separate seed step. Other entry points:
+
+```bash
+npm run dev:backend    # backend only
+npm run dev:frontend   # frontend only (falls back to the bundled sample dataset)
+npm run build          # type-check + emit all packages
+curl http://127.0.0.1:3001/api/summary   # quick backend sanity check
+```
+
+## Testing
+
+```bash
+npm test             # all Vitest suites (shared, engine, backend, frontend)
+npm run typecheck    # type-check without emitting
+npm run e2e          # Playwright e2e (drives the timeline in Chromium)
+```
+
+In sandboxes where Playwright's own browser build isn't present, point it at a
+preinstalled Chromium: `PW_CHROMIUM_PATH=/path/to/chrome npm run e2e`.
+
+## Seeding & Inspecting the Database
+
+`npm run dev` auto-populates an empty DB. To generate and inspect a database
+directly (Phase 1 is verifiable via DB inspection):
 
 ```bash
 npm run seed                          # → ./data/ecp.db
 npm run seed -- --seed 7 --items 60   # different seed / size
+npm run export:fixture                # regenerate the frontend's bundled fallback dataset
 ```
 
-Example output:
+Example `npm run seed` output:
 
 ```
 Seeded synthetic dataset → ./data/ecp.db (seed=1)
@@ -203,15 +134,7 @@ Seeded synthetic dataset → ./data/ecp.db (seed=1)
     ...
 ```
 
-### Run the API
-
-```bash
-npm run seed                                   # ensure ./data/ecp.db exists
-npm run dev --workspace @ecp/backend           # Fastify on http://127.0.0.1:3001
-curl http://127.0.0.1:3001/api/summary
-```
-
-## Layout
+## Project Layout
 
 ```
 packages/
@@ -219,10 +142,11 @@ packages/
   engine/     @ecp/engine  — pure capacity engine (projection + verdict)
     src/        calendar.ts, capacity.ts, project.ts, adapter.ts, config.ts
     test/       vitest suites (calendar, capacity, project, adapter)
-  backend/    @ecp/backend — SQLite schema/persistence, SyntheticImporter, API
+  backend/    @ecp/backend — config, SQLite schema/persistence, importers, API
     src/
+      config.ts   env-driven configuration
       db/         schema.ts, database.ts, persist.ts
-      importer/   rng.ts, synthetic.ts
+      importer/   rng.ts, synthetic.ts, jira.ts, factory.ts
       scripts/    seed.ts, export-fixture.ts
       server.ts
     test/       vitest suites
@@ -234,6 +158,7 @@ packages/
     test/       vitest logic suites
     e2e/        playwright specs
 docs/         project plan
+.env.example  every configurable knob
 ```
 
 ## Conventions
@@ -242,4 +167,62 @@ docs/         project plan
 - The synthetic generator is fully deterministic per seed, so tests assert on
   exact output.
 - The SQLite file is the shareable unit and is gitignored — regenerate it with
-  `npm run seed`.
+  `npm run seed` (or let the server auto-import on startup).
+
+# Project Planning
+
+The full spec lives in
+[`docs/sprint-planning-tool-project-plan.md`](docs/sprint-planning-tool-project-plan.md).
+This section tracks status and notes as we go.
+
+## Roadmap
+
+**Milestone 1 (Phases 1–3)** proved the core hypothesis — synthetic data →
+capacity engine → colored timeline — built as independently reviewable PRs.
+
+| Phase | Scope | Status |
+| ----- | ----- | ------ |
+| **1** | Data model + synthetic importer | ✅ merged |
+| **2** | Capacity engine + exhaustive unit tests | ✅ merged |
+| **3** | Calendar / timeline UI (red/yellow/green) | ✅ merged |
+| — | Live API wiring + full config/portability | 🔍 in review |
+| **4** | Dependency graph UI (DAG, high-leverage highlighting) | ⏭️ next |
+| **5** | Configuration UI (knobs dashboard) + write endpoints | ⏳ planned |
+| **6** | Export / import of the database file | ⏳ planned |
+| **7** | Jira importer (implements the seam already in place) | ⏳ planned |
+| **8** | Polish & packaging (e2e hardening, optional Tauri/Electron) | ⏳ planned |
+
+## Delivered so far
+
+- **Domain + persistence** — schema for teams/cadence, roster, PTO, on-call,
+  velocity overrides, epics, "relevant day" milestones (exactly one gating),
+  stories, work items, dependencies, and a settings store. FK-enforced,
+  transactional, lossless round-trip.
+- **Synthetic importer** — deterministic, seedable ~50-item epic with varied
+  points/statuses/assignees and a DAG dependency web including high-leverage
+  blockers.
+- **Capacity engine** — day-by-day projection to a dev-complete date; capacity
+  scaled by PTO/on-call/velocity-override (composed multiplicatively);
+  `buffer = workingDaysBetween(devComplete, gatingDate)` → green/yellow/red with
+  a reason. Pure and exhaustively unit-tested.
+- **Timeline UI** — status strip + horizontal timeline (today, relevant-day
+  markers, verdict-colored dev-complete, buffer band, sprint capacity bands),
+  recomputing live on edits and ticket cuts, with the engine running in-browser.
+- **Plumbing + config** — UI loads from the live backend API (bundled-sample
+  fallback); everything env-driven behind one root `.env`; importer selected by
+  config with a Jira seam ready for Phase 7.
+
+## Notes & open questions
+
+- **Read-only API today.** Editing capacity inputs (members, PTO, on-call,
+  thresholds, relevant days) needs write endpoints — planned with the Phase 5
+  config dashboard.
+- **Single-epic view.** The timeline shows `epics[0]`; multi-epic selection can
+  become config/UI once a real Jira project brings several.
+- **Modeling choice:** any non-`Done` work item counts as fully remaining (no
+  partial-progress fraction yet). Velocity is per **sprint**, so sprint length
+  affects daily throughput — faithful to the spec's unit.
+- **No CI** — this repo is destined for an internal work environment, so GitHub
+  Actions is intentionally omitted.
+
+_Add planning notes here as they come up and reference them from PRs/commits._
