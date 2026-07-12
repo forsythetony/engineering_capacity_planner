@@ -178,12 +178,14 @@ export function generateSyntheticDataset(config: SyntheticConfig = {}): DomainDa
       memberId: activeMembers[0]!.id,
       startDate: addDays(today, 3),
       endDate: addDays(today, 7),
+      note: 'Summer holiday',
     },
     {
       id: 'PTO2',
       memberId: activeMembers[1]!.id,
       startDate: addDays(today, 8),
       endDate: addDays(today, 9),
+      note: null,
     },
   ];
 
@@ -193,6 +195,7 @@ export function generateSyntheticDataset(config: SyntheticConfig = {}): DomainDa
       memberId: activeMembers[2]!.id,
       startDate: sprintAnchorDate,
       endDate: addDays(sprintAnchorDate, 13), // the current sprint
+      note: 'Primary rotation',
     },
   ];
 
@@ -204,6 +207,7 @@ export function generateSyntheticDataset(config: SyntheticConfig = {}): DomainDa
       startDate: today,
       endDate: addDays(today, 13),
       multiplier: 0.5,
+      note: 'Ramping hire',
     },
   ];
 

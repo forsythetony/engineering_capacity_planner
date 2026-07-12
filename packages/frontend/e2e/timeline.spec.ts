@@ -102,3 +102,54 @@ test.describe('Jira link affordance', () => {
     await expect(page.locator('[data-testid^="jira-link-CKT-"]').first()).toBeVisible();
   });
 });
+
+test.describe('Configuration tab', () => {
+  test('renders the knobs dashboard; read-only without a backend', async ({ page }) => {
+    await page.goto('/');
+    await page.getByTestId('tab-configuration').click();
+
+    const config = page.getByTestId('configuration');
+    await expect(config).toBeVisible();
+    // Core sections are present.
+    await expect(page.getByTestId('cfg-members')).toBeVisible();
+    await expect(page.getByTestId('cfg-milestones')).toBeVisible();
+
+    // The e2e harness runs without a backend, so editing is disabled and the
+    // read-only notice explains why.
+    await expect(page.getByTestId('config-readonly')).toBeVisible();
+    await expect(page.getByTestId('cfg-knobs-save')).toBeDisabled();
+    await expect(page.getByTestId('cfg-oncall-mult')).toBeDisabled();
+
+    // The gating relevant day is flagged in the list.
+    await expect(page.locator('.config-row.gating')).toHaveCount(1);
+  });
+
+  test('availability has calendar + list views with member avatars', async ({ page }) => {
+    await page.goto('/');
+    await page.getByTestId('tab-configuration').click();
+
+    // Calendar view renders bands from the fixture, each with a member avatar.
+    const calendar = page.getByTestId('availability-calendar');
+    await expect(calendar).toBeVisible();
+    await expect(calendar.locator('.cal-band')).not.toHaveCount(0);
+    await expect(calendar.locator('.avatar').first()).toBeVisible();
+
+    // The Add button is disabled (no backend), so the modal can't open here.
+    await expect(page.getByTestId('avail-add')).toBeDisabled();
+
+    // Switch to the searchable list view.
+    await page.getByTestId('avail-view-list').click();
+    await expect(page.getByTestId('availability-list')).toBeVisible();
+    const rowsBefore = await page.locator('[data-testid^="avail-row-"]').count();
+    expect(rowsBefore).toBeGreaterThan(0);
+
+    // Notes from the fixture are shown and are searchable.
+    await expect(page.locator('.avail-note').first()).toBeVisible();
+    await page.getByTestId('availability-search').fill('Summer holiday');
+    await expect(page.locator('[data-testid^="avail-row-"]')).toHaveCount(1);
+
+    // Searching a non-existent member filters everything out.
+    await page.getByTestId('availability-search').fill('zzzznobody');
+    await expect(page.locator('[data-testid^="avail-row-"]')).toHaveCount(0);
+  });
+});
