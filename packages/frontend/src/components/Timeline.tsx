@@ -80,7 +80,7 @@ export function Timeline({ scope, result, today }: TimelineProps) {
       ))}
 
       {/* Buffer band between dev-complete and the gating day. */}
-      {devComplete && <BufferBand from={devComplete} to={scope.gating.date} scale={scale} />}
+      {devComplete && scope.gating && <BufferBand from={devComplete} to={scope.gating.date} scale={scale} />}
 
       {topMarkers.map((m, i) => (
         <Marker

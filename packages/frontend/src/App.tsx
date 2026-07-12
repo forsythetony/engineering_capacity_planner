@@ -87,7 +87,9 @@ function Planner({
   const [tab, setTab] = useState<'timeline' | 'dependencies' | 'gantt' | 'configuration'>(
     'timeline',
   );
-  const result = useMemo(() => runScenario(scope, scenario), [scope, scenario]);
+  // No verdict without a gating relevant day (e.g. a fresh Jira import). The
+  // timeline prompts the user to add one; the other tabs work regardless.
+  const result = useMemo(() => (scope.gating ? runScenario(scope, scenario) : null), [scope, scenario]);
 
   return (
     <div className="app">
@@ -141,17 +143,26 @@ function Planner({
         {source === 'api' ? '● Live data from backend API' : '○ Bundled sample data (backend not connected)'}
       </div>
 
-      {tab !== 'configuration' && <StatusStrip result={result} />}
+      {tab !== 'configuration' && result && <StatusStrip result={result} />}
+
+      {tab !== 'configuration' && !scope.gating && (
+        <div className="panel config-notice" data-testid="no-gating-notice">
+          This epic has no gating relevant day yet, so there's no timeline verdict to show. Add one
+          under <strong>Configuration → Relevant days</strong> (mark it gating) to project against it.
+        </div>
+      )}
 
       {tab === 'timeline' && (
         <>
-          <div className="panel">
-            <Timeline scope={scope} result={result} today={scenario.today} />
-            <p className="footnote">
-              Gating relevant day: <strong>{scope.gating.name}</strong> on{' '}
-              {formatDate(scope.gating.date)}. The projection re-runs on every change below.
-            </p>
-          </div>
+          {scope.gating && result && (
+            <div className="panel">
+              <Timeline scope={scope} result={result} today={scenario.today} />
+              <p className="footnote">
+                Gating relevant day: <strong>{scope.gating.name}</strong> on{' '}
+                {formatDate(scope.gating.date)}. The projection re-runs on every change below.
+              </p>
+            </div>
+          )}
 
           <div className="panel">
             <WorkItemList scope={scope} scenario={scenario} />

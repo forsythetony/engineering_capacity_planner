@@ -17,8 +17,9 @@ describe('scopeEpic', () => {
   it('scopes to the epic and its gating milestone', () => {
     expect(scope.epic.key).toBe('CKT');
     expect(scope.workItems).toHaveLength(50);
-    expect(scope.gating.isGating).toBe(true);
-    expect(scope.gating.name).toMatch(/QA/);
+    expect(scope.gating).not.toBeNull();
+    expect(scope.gating!.isGating).toBe(true);
+    expect(scope.gating!.name).toMatch(/QA/);
     expect(scope.stories.length).toBeGreaterThan(0);
   });
 });
@@ -27,7 +28,7 @@ describe('runScenario', () => {
   it('opens the default scenario in the yellow band (calibrated fixture)', () => {
     const r = runScenario(scope, baseScenario());
     expect(r.verdict).toBe('yellow');
-    expect(r.gatingDate).toBe(scope.gating.date);
+    expect(r.gatingDate).toBe(scope.gating!.date);
   });
 
   it('cutting every item empties the plan and turns it green', () => {

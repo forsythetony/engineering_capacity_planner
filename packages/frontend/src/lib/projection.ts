@@ -21,7 +21,12 @@ import { project, readEngineConfig, type ProjectionResult } from '@ecp/engine';
 export interface EpicScope {
   epic: Epic;
   team: Team;
-  gating: EpicMilestone;
+  /**
+   * The gating "relevant day" that drives the verdict, or `null` when the epic
+   * has none yet (e.g. right after a Jira import — Jira has no such concept).
+   * The timeline prompts the user to add one; the other tabs work without it.
+   */
+  gating: EpicMilestone | null;
   /** All of the epic's milestones, ascending by date. */
   milestones: EpicMilestone[];
   /** The epic's user stories (the grouping layer above work items). */
@@ -63,8 +68,7 @@ export function scopeEpic(dataset: DomainDataset, epicKey: string): EpicScope {
   if (!epic) throw new Error(`Epic ${epicKey} not found`);
   const team = dataset.teams.find((t) => t.id === epic.teamId);
   if (!team) throw new Error(`Team ${epic.teamId} not found`);
-  const gating = dataset.milestones.find((m) => m.epicKey === epicKey && m.isGating);
-  if (!gating) throw new Error(`Epic ${epicKey} has no gating milestone`);
+  const gating = dataset.milestones.find((m) => m.epicKey === epicKey && m.isGating) ?? null;
 
   const milestones = dataset.milestones
     .filter((m) => m.epicKey === epicKey)
@@ -129,8 +133,13 @@ export function effectiveWorkItems(scope: EpicScope, scenario: Scenario): WorkIt
     .map((w) => (scenario.doneItemKeys.has(w.key) ? { ...w, status: 'Done' } : w));
 }
 
-/** Re-run the pure engine for the current scenario. */
+/**
+ * Re-run the pure engine for the current scenario. Requires a gating day, so
+ * callers must guard on {@link EpicScope.gating} (the timeline shows a prompt
+ * to add one when it's absent).
+ */
 export function runScenario(scope: EpicScope, scenario: Scenario): ProjectionResult {
+  if (!scope.gating) throw new Error('runScenario requires a gating milestone');
   return project({
     today: scenario.today,
     team: scope.team,

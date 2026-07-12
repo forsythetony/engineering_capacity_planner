@@ -35,13 +35,19 @@ export function createImporter(
     case 'synthetic':
       return new SyntheticImporter({ seed: config.syntheticSeed });
     case 'jira': {
-      const client = clientOverride ?? buildHttpClient(config.jira);
+      const client = buildJiraClient(config.jira, clientOverride);
       return new JiraImporter(client, resolveMapping(settings, config.jira));
     }
   }
 }
 
-function buildHttpClient(jira: JiraConfig): HttpJiraClient {
+/**
+ * Build a raw {@link JiraClient} for connection-level operations (the field
+ * sample endpoint, sync). Returns the override when given (the fake); otherwise
+ * an HTTP client, throwing if the connection secrets are absent.
+ */
+export function buildJiraClient(jira: JiraConfig, override?: JiraClient): JiraClient {
+  if (override) return override;
   const missing = REQUIRED_CONNECTION.filter(({ key }) => jira[key] == null).map(({ env }) => env);
   if (missing.length > 0) {
     throw new Error(`Jira connection incomplete — set: ${missing.join(', ')}`);

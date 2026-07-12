@@ -5,7 +5,9 @@ import { readDataset, writeDataset } from './db/persist.js';
 import { createImporter } from './importer/factory.js';
 import { HttpError } from './http-error.js';
 import type { JiraClient } from './jira/client.js';
+import { createDemoJiraClient, DEMO_MAPPING } from './jira/demo.js';
 import { registerConfigRoutes } from './routes/config.js';
+import { registerJiraRoutes } from './routes/jira.js';
 import { registerPlanningRoutes } from './routes/planning.js';
 import { registerSyncRoutes } from './routes/sync.js';
 
@@ -24,15 +26,33 @@ export interface BuildServerDeps {
  * (synthetic today, Jira in Phase 7), so `npm run dev` works with zero setup.
  */
 export async function buildServer(overrides: Partial<AppConfig> = {}, deps: BuildServerDeps = {}) {
-  const config: AppConfig = { ...loadConfig(), ...overrides };
+  let config: AppConfig = { ...loadConfig(), ...overrides };
 
   const app = Fastify({ logger: true });
   const db = openDatabase({ path: config.dbPath });
 
+  // Demo mode: stand up a pre-seeded fake Jira and default its mapping, so the
+  // field mapper + Sync work in the real app with no credentials.
+  let jiraClient = deps.jiraClient;
+  if (config.jiraFake && !jiraClient) {
+    jiraClient = await createDemoJiraClient(config.syntheticSeed);
+    config = {
+      ...config,
+      dataSource: 'jira',
+      jira: {
+        ...config.jira,
+        projectKey: config.jira.projectKey ?? DEMO_MAPPING.projectKey,
+        storyPointsField: config.jira.storyPointsField ?? DEMO_MAPPING.storyPointsField,
+        blocksLinkType: config.jira.blocksLinkType ?? DEMO_MAPPING.blocksLinkType,
+      },
+    };
+    app.log.info('ECP_JIRA_FAKE — using an in-memory demo Jira board');
+  }
+
   if (config.seedIfEmpty) {
     const { n } = db.prepare('SELECT COUNT(*) AS n FROM epic').get() as { n: number };
     if (n === 0) {
-      const importer = createImporter(config, [], deps.jiraClient);
+      const importer = createImporter(config, [], jiraClient);
       app.log.info(`Empty database — importing from "${importer.name}" source`);
       writeDataset(db, await importer.fetch());
     }
@@ -78,7 +98,9 @@ export async function buildServer(overrides: Partial<AppConfig> = {}, deps: Buil
   // Gantt Planner placement endpoints (project plan §6a).
   registerPlanningRoutes(app, db);
   // Jira sync: re-import + reconcile (project plan §7).
-  registerSyncRoutes(app, db, config, deps.jiraClient);
+  registerSyncRoutes(app, db, config, jiraClient);
+  // Jira introspection for the live field mapper (project plan §7).
+  registerJiraRoutes(app, db, config, jiraClient);
 
   app.addHook('onClose', async () => {
     db.close();
