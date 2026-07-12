@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { loadConfig } from '../src/config.js';
 import { createImporter } from '../src/importer/factory.js';
-import { JiraImporter } from '../src/importer/jira.js';
+
+/** Full Jira connection env (secrets); mapping is settings-driven, not env. */
+const JIRA_CONNECTION_ENV = {
+  ECP_DATA_SOURCE: 'jira',
+  JIRA_BASE_URL: 'https://acme.atlassian.net',
+  JIRA_EMAIL: 'me@acme.com',
+  JIRA_API_TOKEN: 'secret',
+  JIRA_PROJECT_KEY: 'ENG',
+  JIRA_STORY_POINTS_FIELD: 'customfield_10016',
+  JIRA_BLOCKS_LINK_TYPE: 'Blocks',
+} as const;
 
 describe('loadConfig', () => {
   it('uses safe defaults for an empty environment', () => {
@@ -74,35 +84,29 @@ describe('createImporter', () => {
     expect(createImporter(loadConfig({})).name).toBe('synthetic');
   });
 
-  it('returns the Jira importer when selected', () => {
-    const importer = createImporter(loadConfig({ ECP_DATA_SOURCE: 'jira' }));
+  it('builds the Jira importer when the connection is configured', () => {
+    const importer = createImporter(loadConfig(JIRA_CONNECTION_ENV));
     expect(importer.name).toBe('jira');
   });
-});
 
-describe('JiraImporter', () => {
-  it('lists missing configuration by env-var name', () => {
-    const importer = new JiraImporter(loadConfig({ ECP_DATA_SOURCE: 'jira' }).jira);
-    expect(importer.missingConfig()).toContain('JIRA_BASE_URL');
+  it('fails fast listing the missing connection secrets', () => {
+    // Jira selected but no base URL / email / token in the environment.
+    expect(() => createImporter(loadConfig({ ECP_DATA_SOURCE: 'jira' }))).toThrow(
+      /Jira connection incomplete.*JIRA_BASE_URL/,
+    );
   });
 
-  it('fails fast with the missing keys when config is incomplete', async () => {
-    const importer = new JiraImporter(loadConfig({ ECP_DATA_SOURCE: 'jira' }).jira);
-    await expect(importer.fetch()).rejects.toThrow(/JIRA_BASE_URL/);
-  });
-
-  it('reports "not implemented" once fully configured (Phase 7)', async () => {
-    const cfg = loadConfig({
-      ECP_DATA_SOURCE: 'jira',
-      JIRA_BASE_URL: 'https://acme.atlassian.net',
-      JIRA_EMAIL: 'me@acme.com',
-      JIRA_API_TOKEN: 'secret',
-      JIRA_PROJECT_KEY: 'ENG',
-      JIRA_STORY_POINTS_FIELD: 'customfield_10016',
-      JIRA_BLOCKS_LINK_TYPE: 'Blocks',
-    });
-    const importer = new JiraImporter(cfg.jira);
-    expect(importer.missingConfig()).toHaveLength(0);
-    await expect(importer.fetch()).rejects.toThrow(/not implemented yet \(Phase 7\)/);
+  it('requires the field mapping (from settings or env) before importing', () => {
+    // Connection present, but no story-points field mapped anywhere.
+    expect(() =>
+      createImporter(
+        loadConfig({
+          ECP_DATA_SOURCE: 'jira',
+          JIRA_BASE_URL: 'https://acme.atlassian.net',
+          JIRA_EMAIL: 'me@acme.com',
+          JIRA_API_TOKEN: 'secret',
+        }),
+      ),
+    ).toThrow(/Jira field mapping incomplete/);
   });
 });

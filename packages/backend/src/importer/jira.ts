@@ -1,45 +1,103 @@
 import type { DomainDataset, Importer } from '@ecp/shared';
-import type { JiraConfig } from '../config.js';
+import type { JiraClient } from '../jira/client.js';
+import { datasetFromJira } from '../jira/mapper.js';
+import type { JiraMapping } from '../jira/mapping.js';
+import { MappingError } from '../jira/mapping.js';
+import type { JiraIssue, JiraSprint } from '../jira/types.js';
 
-/** Jira config fields that must be present before a real import can run. */
-const REQUIRED: Array<{ key: keyof JiraConfig; env: string }> = [
-  { key: 'baseUrl', env: 'JIRA_BASE_URL' },
-  { key: 'email', env: 'JIRA_EMAIL' },
-  { key: 'apiToken', env: 'JIRA_API_TOKEN' },
-  { key: 'projectKey', env: 'JIRA_PROJECT_KEY' },
-  { key: 'storyPointsField', env: 'JIRA_STORY_POINTS_FIELD' },
-  { key: 'blocksLinkType', env: 'JIRA_BLOCKS_LINK_TYPE' },
-];
+/** Anchor used only when no imported sprint carries a start date. */
+const DEFAULT_FALLBACK_ANCHOR = '2026-01-06';
+
+/** Issue `fields` requested for the work-item layer. */
+function workItemFields(mapping: JiraMapping): string[] {
+  const fields = ['summary', 'status', 'assignee', 'parent', 'issuetype', 'issuelinks', 'labels'];
+  fields.push(mapping.storyPointsField);
+  if (mapping.sprintField) fields.push(mapping.sprintField);
+  if (mapping.labelsField !== 'labels') fields.push(mapping.labelsField);
+  return [...new Set(fields)];
+}
 
 /**
- * Jira data source (project plan §7, Phase 7 — not yet implemented).
+ * Jira data source (project plan §7). Implements the same {@link Importer}
+ * contract the engine, timeline, and graph already consume, so swapping the
+ * synthetic source for Jira changes nothing downstream.
  *
- * The seam is real: it implements the same {@link Importer} interface the
- * engine, timeline, and graph already consume, and reads all of its connection
- * and mapping details from {@link JiraConfig} (env-provided). When Phase 7 lands
- * it fills in {@link fetch} using these settings; nothing else changes.
- *
- * Until then it fails fast with a clear, actionable message — first flagging any
- * missing configuration, then noting it isn't implemented.
+ * It orchestrates the {@link JiraClient} (real HTTP or the in-memory fake) to
+ * pull one epic's subtree + the board's sprints, then hands the raw issues to
+ * the pure {@link datasetFromJira} mapper. Hierarchy is read by **parent-chain
+ * depth** (epic → children = stories → their children = work items) rather than
+ * by issue-type names, so it works across team- and company-managed projects.
  */
 export class JiraImporter implements Importer {
   readonly name = 'jira';
+  private readonly fallbackAnchorDate: string;
 
-  constructor(private readonly config: JiraConfig) {}
+  constructor(
+    private readonly client: JiraClient,
+    private readonly mapping: JiraMapping,
+    options: { fallbackAnchorDate?: string } = {},
+  ) {
+    this.fallbackAnchorDate = options.fallbackAnchorDate ?? DEFAULT_FALLBACK_ANCHOR;
+  }
 
-  /** Config keys still missing, as their environment-variable names. */
-  missingConfig(): string[] {
-    return REQUIRED.filter(({ key }) => this.config[key] == null).map(({ env }) => env);
+  /** Follow `nextPageToken` until the last page, collecting every issue. */
+  private async searchAll(jql: string, fields: string[]): Promise<JiraIssue[]> {
+    const all: JiraIssue[] = [];
+    let nextPageToken: string | undefined;
+    do {
+      const page = await this.client.searchJql({ jql, fields, maxResults: 100, nextPageToken });
+      all.push(...page.issues);
+      nextPageToken = page.isLast ? undefined : page.nextPageToken;
+    } while (nextPageToken);
+    return all;
+  }
+
+  private async resolveEpicKey(): Promise<string> {
+    if (this.mapping.epicKey) return this.mapping.epicKey;
+    // No epic pinned: take the first Epic in the project.
+    const epics = await this.searchAll(
+      `project = "${this.mapping.projectKey}" AND issuetype = Epic ORDER BY created ASC`,
+      ['summary'],
+    );
+    if (epics.length === 0) {
+      throw new MappingError(
+        `No epic found in project "${this.mapping.projectKey}" — set an epic key in the Jira mapping.`,
+      );
+    }
+    return epics[0]!.key;
+  }
+
+  private async fetchSprints(): Promise<JiraSprint[]> {
+    let boardId = this.mapping.boardId;
+    if (boardId == null) {
+      const boards = await this.client.listBoards(this.mapping.projectKey);
+      if (boards.length === 0) return [];
+      boardId = boards[0]!.id;
+    }
+    return this.client.listSprints(boardId);
   }
 
   async fetch(): Promise<DomainDataset> {
-    const missing = this.missingConfig();
-    if (missing.length > 0) {
-      throw new Error(`Jira configuration incomplete — set: ${missing.join(', ')}`);
+    const epicKey = await this.resolveEpicKey();
+    const epicIssue = await this.client.getIssue(epicKey, ['summary']);
+
+    const storyIssues = await this.searchAll(`parent = "${epicKey}"`, ['summary', 'parent']);
+
+    let workIssues: JiraIssue[] = [];
+    if (storyIssues.length > 0) {
+      const inList = storyIssues.map((s) => `"${s.key}"`).join(', ');
+      workIssues = await this.searchAll(`parent in (${inList})`, workItemFields(this.mapping));
     }
-    throw new Error(
-      'JiraImporter is configured but not implemented yet (Phase 7). ' +
-        'Set ECP_DATA_SOURCE=synthetic to run against synthetic data for now.',
-    );
+
+    const sprints = await this.fetchSprints();
+
+    return datasetFromJira({
+      epicIssue,
+      storyIssues,
+      workIssues,
+      sprints,
+      mapping: this.mapping,
+      fallbackAnchorDate: this.fallbackAnchorDate,
+    });
   }
 }
