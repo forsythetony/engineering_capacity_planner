@@ -5,7 +5,9 @@ import type {
   EpicMilestone,
   IsoDate,
   Oncall,
+  PlannedPlacement,
   Pto,
+  Sprint,
   Team,
   TeamMember,
   UserStory,
@@ -31,8 +33,12 @@ export interface EpicScope {
   pto: Pto[];
   oncall: Oncall[];
   velocityOverrides: VelocityOverride[];
+  /** The team's stored sprints (Gantt Planner selector), ascending by start. */
+  sprints: Sprint[];
+  /** Week placements for this epic's work items (Gantt Planner). */
+  placements: PlannedPlacement[];
   /** Engine knob defaults read from the dataset's settings. */
-  defaults: { greenMinBufferDays: number; oncallMultiplier: number };
+  defaults: { greenMinBufferDays: number; oncallMultiplier: number; weekYellowLoadFraction: number };
   /**
    * The "today" to open the projection on, from the `planning_today` setting;
    * `null` for real data, where the UI uses the actual current date.
@@ -79,6 +85,11 @@ export function scopeEpic(dataset: DomainDataset, epicKey: string): EpicScope {
   const oncall = dataset.oncall.filter((o) => memberIds.has(o.memberId));
   const velocityOverrides = dataset.velocityOverrides.filter((v) => memberIds.has(v.memberId));
 
+  const sprints = (dataset.sprints ?? [])
+    .filter((s) => s.teamId === team.id)
+    .sort((a, b) => a.startDate.localeCompare(b.startDate));
+  const placements = (dataset.placements ?? []).filter((p) => itemKeys.has(p.workItemKey));
+
   const cfg = readEngineConfig(dataset);
   return {
     epic,
@@ -92,9 +103,12 @@ export function scopeEpic(dataset: DomainDataset, epicKey: string): EpicScope {
     pto,
     oncall,
     velocityOverrides,
+    sprints,
+    placements,
     defaults: {
       greenMinBufferDays: cfg.greenMinBufferDays ?? 5,
       oncallMultiplier: cfg.oncallMultiplier ?? 0.5,
+      weekYellowLoadFraction: cfg.weekYellowLoadFraction ?? 1,
     },
     planningToday: readGlobalString(dataset, SETTING_KEYS.PLANNING_TODAY),
   };

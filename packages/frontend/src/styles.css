@@ -1081,3 +1081,154 @@ button.tab:hover:not(.active) {
   color: var(--accent);
   border-color: var(--accent);
 }
+
+/* ── Gantt Planner (project plan §6a) ─────────────────────────────────────── */
+.gantt-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.85rem;
+}
+.gantt-sprint {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+.gantt-sprint select {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.35rem 0.5rem;
+}
+.gantt-legend {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.chip-legend {
+  font-size: 0.72rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted, #9aa7bd);
+}
+.chip-legend.green { border-color: var(--green-dim); }
+.chip-legend.yellow { border-color: var(--yellow-dim); }
+.chip-legend.red { border-color: var(--red-dim); }
+
+.gantt-grid {
+  display: grid;
+  gap: 6px;
+  overflow-x: auto;
+}
+.gantt-corner {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted, #9aa7bd);
+  padding: 0.25rem 0.4rem;
+}
+.gantt-corner-sub { font-weight: 400; text-transform: none; letter-spacing: 0; }
+
+.gantt-week {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.4rem 0.55rem;
+  text-align: right;
+}
+.gantt-week.green { background: color-mix(in srgb, var(--green) 16%, var(--panel)); border-color: var(--green-dim); }
+.gantt-week.yellow { background: color-mix(in srgb, var(--yellow) 16%, var(--panel)); border-color: var(--yellow-dim); }
+.gantt-week.red { background: color-mix(in srgb, var(--red) 18%, var(--panel)); border-color: var(--red-dim); }
+.gantt-week-dates { font-weight: 600; font-size: 0.82rem; }
+.gantt-week-load { font-size: 0.78rem; color: var(--muted, #9aa7bd); }
+.gantt-week-load strong { color: var(--text); }
+
+.gantt-lane-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+.gantt-lane-total { color: var(--muted, #9aa7bd); font-weight: 500; font-size: 0.78rem; }
+
+.gantt-cell {
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 0.3rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-content: flex-start;
+  min-height: 2.2rem;
+}
+.gantt-chip {
+  font-size: 0.72rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 18%, var(--panel-2));
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+  white-space: nowrap;
+}
+.gantt-chip.done { opacity: 0.55; text-decoration: line-through; }
+.gantt-chip.bag { background: var(--panel-2); border-color: var(--border); }
+
+.gantt-engineers { margin-top: 1rem; }
+.gantt-engineers-label { font-size: 0.78rem; color: var(--muted, #9aa7bd); }
+.gantt-engineers-row { display: flex; gap: 0.4rem; margin-top: 0.4rem; flex-wrap: wrap; }
+.gantt-engineer {
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  border-radius: 999px;
+}
+.gantt-engineer:hover { outline: 2px solid var(--accent); }
+
+.gantt-bag { margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 0.75rem; }
+.gantt-bag-head { font-weight: 600; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.gantt-bag-count {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.05rem 0.5rem;
+  font-size: 0.78rem;
+}
+.gantt-bag-hint { font-weight: 400; font-size: 0.76rem; color: var(--muted, #9aa7bd); }
+.gantt-bag-items { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 0.5rem; }
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 10, 18, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+.modal {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem 1.15rem;
+  min-width: 300px;
+  max-width: 90vw;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+}
+.modal-head { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.6rem; }
+.modal-close { margin-left: auto; background: none; border: none; color: var(--text); font-size: 1.3rem; cursor: pointer; line-height: 1; }
+.modal-weeks { list-style: none; margin: 0; padding: 0; }
+.modal-weeks li { display: flex; justify-content: space-between; gap: 1.5rem; padding: 0.25rem 0; border-bottom: 1px solid var(--border); }
+.modal-notes { margin: 0.6rem 0 0; padding-left: 1.1rem; font-size: 0.8rem; color: var(--muted, #9aa7bd); }
