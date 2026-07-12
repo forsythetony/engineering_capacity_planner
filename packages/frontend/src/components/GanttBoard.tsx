@@ -7,6 +7,10 @@ import { formatDayShort } from '../lib/format';
 import { buildGanttView, ganttCell, type GanttView, type MemberWeekCapacity } from '../lib/gantt';
 import type { EpicScope } from '../lib/projection';
 import { MemberAvatar } from './MemberAvatar';
+import { WorkCard, type CardAssignee } from './WorkCard';
+
+/** Resolve a work item's assignee to a name + identity color, or null. */
+type AssigneeOf = (item: WorkItem) => CardAssignee | null;
 
 /** DOM-safe slug for test ids and keys. */
 const slug = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
@@ -40,6 +44,15 @@ export function GanttBoard({ scope, source }: { scope: EpicScope; source: Datase
   const colors = useMemo(() => memberColorMap(scope.members), [scope.members]);
 
   const byKey = useMemo(() => new Map(scope.workItems.map((w) => [w.key, w])), [scope.workItems]);
+  const membersById = useMemo(() => new Map(scope.members.map((m) => [m.id, m])), [scope.members]);
+  const assigneeOf = useMemo<AssigneeOf>(
+    () => (item) => {
+      if (!item.assigneeId) return null;
+      const m = membersById.get(item.assigneeId);
+      return m ? { name: m.name, color: colorFor(colors, m.id) } : null;
+    },
+    [membersById, colors],
+  );
   const sprint = view.sprint;
 
   function place(key: string, weekIndex: number): void {
@@ -151,6 +164,7 @@ export function GanttBoard({ scope, source }: { scope: EpicScope; source: Datase
             dragOverWeek={dragOverWeek}
             dropHandlers={dropHandlers}
             startDrag={startDrag}
+            assigneeOf={assigneeOf}
           />
         ))}
       </div>
@@ -198,16 +212,14 @@ export function GanttBoard({ scope, source }: { scope: EpicScope; source: Datase
         </div>
         <div className="gantt-bag-items">
           {view.bag.map((item) => (
-            <span
+            <WorkCard
               key={item.key}
-              className="gantt-chip bag"
-              data-testid={`gantt-bag-item-${item.key}`}
-              draggable
+              item={item}
+              assignee={assigneeOf(item)}
+              variant="bag"
+              testId={`gantt-bag-item-${item.key}`}
               onDragStart={startDrag(item.key)}
-              title={item.title}
-            >
-              <strong>{item.key}</strong> {item.points}p
-            </span>
+            />
           ))}
           {view.bag.length === 0 && <span className="footnote">Nothing left in the bag.</span>}
         </div>
@@ -227,6 +239,7 @@ function LaneRow({
   dragOverWeek,
   dropHandlers,
   startDrag,
+  assigneeOf,
 }: {
   lane: { label: string; totalPoints: number };
   weeks: GanttView['weeks'];
@@ -234,6 +247,7 @@ function LaneRow({
   dragOverWeek: number | null;
   dropHandlers: (weekIndex: number) => Record<string, unknown>;
   startDrag: (key: string) => (e: React.DragEvent) => void;
+  assigneeOf: AssigneeOf;
 }) {
   return (
     <>
@@ -251,16 +265,14 @@ function LaneRow({
             {...dropHandlers(w.index)}
           >
             {cell?.items.map((item: WorkItem) => (
-              <span
+              <WorkCard
                 key={item.key}
-                className={`gantt-chip${item.status === 'Done' ? ' done' : ''}`}
-                data-testid={`gantt-chip-${item.key}`}
-                draggable
+                item={item}
+                assignee={assigneeOf(item)}
+                variant="cell"
+                testId={`gantt-chip-${item.key}`}
                 onDragStart={startDrag(item.key)}
-                title={`${item.title} — ${item.status}`}
-              >
-                <strong>{item.key}</strong> {item.points}p
-              </span>
+              />
             ))}
           </div>
         );

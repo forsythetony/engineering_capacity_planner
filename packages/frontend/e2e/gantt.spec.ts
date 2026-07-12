@@ -20,6 +20,22 @@ test.describe('Gantt Planner tab', () => {
     await expect(page.locator('[data-testid^="gantt-bag-item-"]').first()).toBeVisible();
   });
 
+  test('cards carry the title and reveal full details on hover', async ({ page }) => {
+    await page.goto('/');
+    await page.getByTestId('tab-gantt').click();
+
+    const card = page.getByTestId('gantt-bag-item-CKT-21');
+    const title = (await card.locator('.work-card-title').innerText()).trim();
+    expect(title.length).toBeGreaterThan(0);
+
+    // Hovering surfaces a clean tooltip echoing the key and the full title.
+    await card.hover();
+    const tip = page.getByTestId('work-card-tooltip');
+    await expect(tip).toBeVisible();
+    await expect(tip).toContainText('CKT-21');
+    await expect(tip).toContainText(title);
+  });
+
   test('opens the per-engineer weekly capacity modal', async ({ page }) => {
     await page.goto('/');
     await page.getByTestId('tab-gantt').click();
@@ -30,6 +46,17 @@ test.describe('Gantt Planner tab', () => {
     await expect(modal.locator('.modal-weeks li')).toHaveCount(2);
   });
 
+  // Native HTML5 drag can't be driven by Playwright's real-mouse simulation in
+  // headless Chromium, so we dispatch the drag events with a shared DataTransfer
+  // (Playwright's recommended pattern). This drives the exact onDragStart /
+  // onDrop handlers a real drag fires.
+  async function drag(page: import('@playwright/test').Page, from: string, to: string) {
+    const dt = await page.evaluateHandle(() => new DataTransfer());
+    await page.getByTestId(from).dispatchEvent('dragstart', { dataTransfer: dt });
+    await page.getByTestId(to).dispatchEvent('dragover', { dataTransfer: dt });
+    await page.getByTestId(to).dispatchEvent('drop', { dataTransfer: dt });
+  }
+
   test('dragging a backlog card into a week recomputes it live', async ({ page }) => {
     await page.goto('/');
     await page.getByTestId('tab-gantt').click();
@@ -38,8 +65,7 @@ test.describe('Gantt Planner tab', () => {
     await expect(week1).toHaveAttribute('data-verdict', 'green');
 
     // Drop a 5-point card into the comfortable second week, pushing it over.
-    const card = page.getByTestId('gantt-bag-item-CKT-21');
-    await card.dragTo(week1);
+    await drag(page, 'gantt-bag-item-CKT-21', 'gantt-week-1');
 
     await expect(page.getByTestId('gantt-bag-item-CKT-21')).toHaveCount(0);
     await expect(page.getByTestId('gantt-chip-CKT-21')).toBeVisible();
@@ -51,11 +77,11 @@ test.describe('Gantt Planner tab', () => {
     await page.getByTestId('tab-gantt').click();
 
     const week1 = page.getByTestId('gantt-week-1');
-    await page.getByTestId('gantt-bag-item-CKT-21').dragTo(week1);
+    await drag(page, 'gantt-bag-item-CKT-21', 'gantt-week-1');
     await expect(week1).toHaveAttribute('data-verdict', 'red');
 
     // Send it back to the bag; the week returns to green.
-    await page.getByTestId('gantt-chip-CKT-21').dragTo(page.getByTestId('gantt-bag'));
+    await drag(page, 'gantt-chip-CKT-21', 'gantt-bag');
     await expect(week1).toHaveAttribute('data-verdict', 'green');
     await expect(page.getByTestId('gantt-bag-item-CKT-21')).toBeVisible();
   });
