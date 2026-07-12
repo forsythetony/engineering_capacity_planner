@@ -6,7 +6,7 @@ const dataset = loadBundledDataset();
 const scope = scopeEpic(dataset, 'CKT');
 
 const baseScenario = (): Scenario => ({
-  today: scope.team.sprintAnchorDate,
+  today: scope.planningToday ?? scope.team.sprintAnchorDate,
   cutItemKeys: new Set(),
   doneItemKeys: new Set(),
   greenMinBufferDays: scope.defaults.greenMinBufferDays,

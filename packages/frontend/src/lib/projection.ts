@@ -11,6 +11,7 @@ import type {
   VelocityOverride,
   WorkItem,
 } from '@ecp/shared';
+import { SETTING_KEYS } from '@ecp/shared';
 import { project, readEngineConfig, type ProjectionResult } from '@ecp/engine';
 
 /** Everything the timeline needs about a single epic, pulled from the dataset. */
@@ -29,6 +30,11 @@ export interface EpicScope {
   velocityOverrides: VelocityOverride[];
   /** Engine knob defaults read from the dataset's settings. */
   defaults: { greenMinBufferDays: number; oncallMultiplier: number };
+  /**
+   * The "today" to open the projection on, from the `planning_today` setting;
+   * `null` for real data, where the UI uses the actual current date.
+   */
+  planningToday: IsoDate | null;
 }
 
 /** The live, user-editable inputs that drive a re-projection. */
@@ -82,7 +88,16 @@ export function scopeEpic(dataset: DomainDataset, epicKey: string): EpicScope {
       greenMinBufferDays: cfg.greenMinBufferDays ?? 5,
       oncallMultiplier: cfg.oncallMultiplier ?? 0.5,
     },
+    planningToday: readGlobalString(dataset, SETTING_KEYS.PLANNING_TODAY),
   };
+}
+
+/** Read a global string setting (JSON-encoded), or `null` if absent. */
+function readGlobalString(dataset: DomainDataset, key: string): string | null {
+  const row = dataset.settings.find((s) => s.scope === 'global' && s.key === key);
+  if (!row) return null;
+  const parsed = JSON.parse(row.value);
+  return typeof parsed === 'string' ? parsed : null;
 }
 
 /** Apply a scenario's cuts / mark-done to the epic's work items. */

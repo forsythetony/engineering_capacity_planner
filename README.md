@@ -127,7 +127,7 @@ Seeded synthetic dataset → ./data/ecp.db (seed=1)
   Work items:   50  (188 points)
   Dependencies: 38
   Status mix:   {"In Review":10,"Done":12,"In Progress":7,"To Do":21}
-  Gating day:   First QA in stage pass @ 2026-03-02
+  Gating day:   First QA in stage pass @ 2026-07-28
   Top blockers (transitive dependents):
     CKT-2    blocks 16  — Document currency formatting
     CKT-1    blocks 10  — Fix analytics events
@@ -224,5 +224,31 @@ capacity engine → colored timeline — built as independently reviewable PRs.
   affects daily throughput — faithful to the spec's unit.
 - **No CI** — this repo is destined for an internal work environment, so GitHub
   Actions is intentionally omitted.
+- **Demo scenario dates** — the synthetic data plans as of **Sun Jul 12, 2026**
+  toward a gating target of **Tue Jul 28, 2026** (the importer's `today` /
+  `gatingDate`). Dates render as `Sun Jul 12, 2026` throughout. Real data uses
+  the actual current date.
+
+## Resuming work (fresh session / handoff)
+
+This README is the handoff. To pick up where the last session left off, read, in
+order: **this Project Planning section** (roadmap + what's delivered + notes),
+[`docs/sprint-planning-tool-project-plan.md`](docs/sprint-planning-tool-project-plan.md)
+(the full spec), and the **git log / merged PRs** (each phase is one PR).
+
+Working agreement used so far:
+
+- **One reviewable PR per phase**, built on a feature branch off `main`.
+- After a PR merges, **restart the branch from the latest `main`** for the next
+  phase (don't stack on merged history).
+- **Verify before every PR:** `npm run build && npm run typecheck && npm test`,
+  plus `npm run e2e` for UI changes, and a screenshot of any new UI.
+- Keep everything **config-driven** — no hardcoded ports, paths, dates, or
+  credentials (see Configuration Setup).
+
+**Next up: Phase 4 — the dependency graph UI** (left-to-right DAG of tickets,
+edges = "blocked by", high-leverage blockers highlighted via transitive-dependent
+count). The dependency data and the leverage ranking already exist (see the
+synthetic importer and the `seed` script's "Top blockers" output).
 
 _Add planning notes here as they come up and reference them from PRs/commits._

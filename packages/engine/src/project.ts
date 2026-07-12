@@ -7,7 +7,7 @@ import type {
   VelocityOverride,
   WorkItem,
 } from '@ecp/shared';
-import { addDays, isWorkingDay, workingDaysBetween } from '@ecp/shared';
+import { addDays, formatHumanDate, isWorkingDay, workingDaysBetween } from '@ecp/shared';
 import { makeSprintCache, sprintIndexFor } from './calendar.js';
 import { buildCapacityContext, dayCapacity, sprintCapacity } from './capacity.js';
 import { DEFAULT_ENGINE_CONFIG, type EngineConfig } from './config.js';
@@ -153,6 +153,7 @@ function classify(
   cfg: EngineConfig,
 ): { verdict: Verdict; reason: string; bufferWorkingDays: number | null } {
   const gating = input.gatingDate;
+  const gatingText = formatHumanDate(gating);
 
   if (devComplete === null) {
     return {
@@ -171,27 +172,29 @@ function classify(
     return {
       verdict,
       bufferWorkingDays: buffer,
-      reason: `All work is complete; ${buffer} working day(s) of buffer before the gating day ${gating}.`,
+      reason: `All work is complete; ${buffer} working day(s) of buffer before the gating day ${gatingText}.`,
     };
   }
+
+  const devText = formatHumanDate(devComplete);
 
   if (buffer < 0) {
     return {
       verdict: 'red',
       bufferWorkingDays: buffer,
-      reason: `Projected dev-complete ${devComplete} is ${-buffer} working day(s) past the gating day ${gating}.`,
+      reason: `Projected dev-complete ${devText} is ${-buffer} working day(s) past the gating day ${gatingText}.`,
     };
   }
   if (buffer < cfg.greenMinBufferDays) {
     return {
       verdict: 'yellow',
       bufferWorkingDays: buffer,
-      reason: `Projected dev-complete ${devComplete} leaves only ${buffer} working day(s) of buffer before ${gating} (want ≥ ${cfg.greenMinBufferDays}).`,
+      reason: `Projected dev-complete ${devText} leaves only ${buffer} working day(s) of buffer before ${gatingText} (want ≥ ${cfg.greenMinBufferDays}).`,
     };
   }
   return {
     verdict: 'green',
     bufferWorkingDays: buffer,
-    reason: `Projected dev-complete ${devComplete} leaves ${buffer} working days of buffer before the gating day ${gating}.`,
+    reason: `Projected dev-complete ${devText} leaves ${buffer} working days of buffer before the gating day ${gatingText}.`,
   };
 }

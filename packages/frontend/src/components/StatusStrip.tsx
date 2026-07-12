@@ -1,5 +1,5 @@
 import type { ProjectionResult } from '@ecp/engine';
-import { formatFullDay, VERDICT_LABEL } from '../lib/format';
+import { formatDate, VERDICT_LABEL } from '../lib/format';
 
 /** The big green/yellow/red banner: verdict, reasoning, and headline metrics. */
 export function StatusStrip({ result }: { result: ProjectionResult }) {
@@ -17,7 +17,7 @@ export function StatusStrip({ result }: { result: ProjectionResult }) {
         <div className="metric">
           <div className="metric-value" data-testid="dev-complete">
             {result.projectedDevCompleteDate
-              ? formatFullDay(result.projectedDevCompleteDate)
+              ? formatDate(result.projectedDevCompleteDate)
               : '—'}
           </div>
           <div className="metric-label">Projected dev-complete</div>

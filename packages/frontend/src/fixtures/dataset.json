@@ -5,7 +5,7 @@
       "name": "Platform Team",
       "sprintLengthDays": 14,
       "sprintStartWeekday": 2,
-      "sprintAnchorDate": "2026-01-06",
+      "sprintAnchorDate": "2026-07-07",
       "workingDays": [
         1,
         2,
@@ -56,8 +56,8 @@
     {
       "id": "VO1",
       "memberId": "M4",
-      "startDate": "2026-01-06",
-      "endDate": "2026-01-26",
+      "startDate": "2026-07-12",
+      "endDate": "2026-07-25",
       "multiplier": 0.5
     }
   ],
@@ -65,22 +65,22 @@
     {
       "id": "PTO1",
       "memberId": "M1",
-      "startDate": "2026-01-16",
-      "endDate": "2026-01-20"
+      "startDate": "2026-07-15",
+      "endDate": "2026-07-19"
     },
     {
       "id": "PTO2",
       "memberId": "M2",
-      "startDate": "2026-01-30",
-      "endDate": "2026-01-31"
+      "startDate": "2026-07-20",
+      "endDate": "2026-07-21"
     }
   ],
   "oncall": [
     {
       "id": "OC1",
       "memberId": "M3",
-      "startDate": "2026-01-06",
-      "endDate": "2026-01-19"
+      "startDate": "2026-07-07",
+      "endDate": "2026-07-20"
     }
   ],
   "epics": [
@@ -95,21 +95,21 @@
       "id": "MS1",
       "epicKey": "CKT",
       "name": "Feature freeze",
-      "date": "2026-02-15",
+      "date": "2026-07-23",
       "isGating": false
     },
     {
       "id": "MS2",
       "epicKey": "CKT",
       "name": "First QA in stage pass",
-      "date": "2026-03-02",
+      "date": "2026-07-28",
       "isGating": true
     },
     {
       "id": "MS3",
       "epicKey": "CKT",
       "name": "Launch",
-      "date": "2026-03-22",
+      "date": "2026-08-11",
       "isGating": false
     }
   ],
@@ -795,6 +795,12 @@
       "scope": "global",
       "scopeId": null,
       "value": "null"
+    },
+    {
+      "key": "planning_today",
+      "scope": "global",
+      "scopeId": null,
+      "value": "\"2026-07-12\""
     }
   ]
 }

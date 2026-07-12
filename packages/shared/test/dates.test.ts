@@ -3,6 +3,8 @@ import {
   addDays,
   diffDays,
   enumerateWorkingDays,
+  formatHumanDate,
+  formatHumanDateShort,
   formatIso,
   getWeekday,
   isWorkingDay,
@@ -74,6 +76,19 @@ describe('enumerateWorkingDays', () => {
     expect(days[0]).toBe('2026-01-06');
     expect(days.at(-1)).toBe('2026-01-19');
     expect(days).not.toContain('2026-01-10'); // Saturday excluded
+  });
+});
+
+describe('human date formatting', () => {
+  it('formats the canonical full date', () => {
+    expect(formatHumanDate('2026-07-12')).toBe('Sun Jul 12, 2026');
+    expect(formatHumanDate('2026-07-28')).toBe('Tue Jul 28, 2026');
+    expect(formatHumanDate('2026-12-31')).toBe('Thu Dec 31, 2026');
+  });
+
+  it('formats the compact date without the year', () => {
+    expect(formatHumanDateShort('2026-07-12')).toBe('Sun Jul 12');
+    expect(formatHumanDateShort('2026-08-11')).toBe('Tue Aug 11');
   });
 });
 

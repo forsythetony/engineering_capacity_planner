@@ -11,6 +11,12 @@ export const SETTING_KEYS = {
   ONCALL_MULTIPLIER: 'oncall_multiplier',
   /** Buffer (working days) at/above which the epic verdict is green. */
   GREEN_MIN_BUFFER_DAYS: 'green_min_buffer_days',
+  /**
+   * The "today" the UI defaults its projection to. Set by the synthetic
+   * importer so the demo scenario is reproducible; absent for real data, where
+   * the UI uses the actual current date.
+   */
+  PLANNING_TODAY: 'planning_today',
   // --- Jira mapping stubs: designed in early, inert until Phase 7. ---
   /** Jira flavor: `"cloud"` or `"server"`. */
   JIRA_FLAVOR: 'jira_flavor',

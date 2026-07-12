@@ -14,7 +14,14 @@ import type {
   WorkItem,
   WorkItemStatus,
 } from '@ecp/shared';
-import { addDays, CADENCE_DEFAULTS, defaultGlobalSettings } from '@ecp/shared';
+import type { Setting } from '@ecp/shared';
+import {
+  addDays,
+  CADENCE_DEFAULTS,
+  defaultGlobalSettings,
+  getWeekday,
+  SETTING_KEYS,
+} from '@ecp/shared';
 import { Rng } from './rng.js';
 
 export interface SyntheticConfig {
@@ -25,19 +32,22 @@ export interface SyntheticConfig {
   /** Number of user stories to group the work items under. */
   storyCount?: number;
   /**
-   * Reference date the epic timeline is anchored to. Also used as the team's
-   * sprint anchor (a Tuesday). Fixed by default so output is fully
-   * reproducible.
+   * The planning "today" the scenario is built around (stored as the
+   * `planning_today` setting so the UI opens on it). Fixed by default so output
+   * is fully reproducible.
    */
-  referenceDate?: IsoDate;
+  today?: IsoDate;
+  /** The gating "First QA in stage pass" target date the plan leads up to. */
+  gatingDate?: IsoDate;
 }
 
 const DEFAULTS = {
   seed: 1,
   targetWorkItemCount: 50,
   storyCount: 10,
-  // 2026-01-06 is a Tuesday — matches the default sprint start weekday.
-  referenceDate: '2026-01-06',
+  // Planning as of Sun Jul 12, 2026 toward a target of Tue Jul 28, 2026.
+  today: '2026-07-12',
+  gatingDate: '2026-07-28',
 } as const;
 
 /** Number of leading "foundation" work items that many others depend on. */
@@ -114,8 +124,13 @@ export function generateSyntheticDataset(config: SyntheticConfig = {}): DomainDa
   const seed = config.seed ?? DEFAULTS.seed;
   const targetWorkItemCount = config.targetWorkItemCount ?? DEFAULTS.targetWorkItemCount;
   const storyCount = config.storyCount ?? DEFAULTS.storyCount;
-  const referenceDate = config.referenceDate ?? DEFAULTS.referenceDate;
+  const today = config.today ?? DEFAULTS.today;
+  const gatingDate = config.gatingDate ?? DEFAULTS.gatingDate;
   const rng = new Rng(seed);
+
+  // The sprint anchor is the most recent sprint-start weekday on/before today,
+  // so `today` falls inside the current sprint.
+  const sprintAnchorDate = mostRecentWeekday(today, CADENCE_DEFAULTS.SPRINT_START_WEEKDAY);
 
   // --- Team & roster -------------------------------------------------------
   const team: Team = {
@@ -123,7 +138,7 @@ export function generateSyntheticDataset(config: SyntheticConfig = {}): DomainDa
     name: 'Platform Team',
     sprintLengthDays: CADENCE_DEFAULTS.SPRINT_LENGTH_DAYS,
     sprintStartWeekday: CADENCE_DEFAULTS.SPRINT_START_WEEKDAY,
-    sprintAnchorDate: referenceDate,
+    sprintAnchorDate,
     workingDays: [...CADENCE_DEFAULTS.WORKING_DAYS],
   };
 
@@ -142,18 +157,19 @@ export function generateSyntheticDataset(config: SyntheticConfig = {}): DomainDa
   const activeMembers = members.filter((m) => m.active);
 
   // --- Capacity modifiers (PTO, on-call, ramping override) -----------------
+  // Anchored within the planning window so they bite before the gating day.
   const pto: Pto[] = [
     {
       id: 'PTO1',
       memberId: activeMembers[0]!.id,
-      startDate: addDays(referenceDate, 10),
-      endDate: addDays(referenceDate, 14),
+      startDate: addDays(today, 3),
+      endDate: addDays(today, 7),
     },
     {
       id: 'PTO2',
       memberId: activeMembers[1]!.id,
-      startDate: addDays(referenceDate, 24),
-      endDate: addDays(referenceDate, 25),
+      startDate: addDays(today, 8),
+      endDate: addDays(today, 9),
     },
   ];
 
@@ -161,18 +177,18 @@ export function generateSyntheticDataset(config: SyntheticConfig = {}): DomainDa
     {
       id: 'OC1',
       memberId: activeMembers[2]!.id,
-      startDate: referenceDate,
-      endDate: addDays(referenceDate, 13),
+      startDate: sprintAnchorDate,
+      endDate: addDays(sprintAnchorDate, 13), // the current sprint
     },
   ];
 
-  // A ramping hire producing half output for their first three weeks.
+  // A ramping hire producing half output through the planning window.
   const velocityOverrides: VelocityOverride[] = [
     {
       id: 'VO1',
       memberId: activeMembers[activeMembers.length - 1]!.id,
-      startDate: referenceDate,
-      endDate: addDays(referenceDate, 20),
+      startDate: today,
+      endDate: addDays(today, 13),
       multiplier: 0.5,
     },
   ];
@@ -189,21 +205,21 @@ export function generateSyntheticDataset(config: SyntheticConfig = {}): DomainDa
       id: 'MS1',
       epicKey: EPIC_KEY,
       name: 'Feature freeze',
-      date: addDays(referenceDate, 40),
+      date: addDays(gatingDate, -5),
       isGating: false,
     },
     {
       id: 'MS2',
       epicKey: EPIC_KEY,
       name: 'First QA in stage pass',
-      date: addDays(referenceDate, 55),
+      date: gatingDate,
       isGating: true, // exactly one gating milestone drives the verdict
     },
     {
       id: 'MS3',
       epicKey: EPIC_KEY,
       name: 'Launch',
-      date: addDays(referenceDate, 75),
+      date: addDays(gatingDate, 14),
       isGating: false,
     },
   ];
@@ -267,7 +283,27 @@ export function generateSyntheticDataset(config: SyntheticConfig = {}): DomainDa
     stories,
     workItems,
     dependencies,
-    settings: defaultGlobalSettings(),
+    settings: [...defaultGlobalSettings(), planningTodaySetting(today)],
+  };
+}
+
+/** The most recent date on/before `date` that falls on `weekday`. */
+function mostRecentWeekday(date: IsoDate, weekday: number): IsoDate {
+  let d = date;
+  for (let i = 0; i < 7; i++) {
+    if (getWeekday(d) === weekday) return d;
+    d = addDays(d, -1);
+  }
+  return date; // unreachable: any 7-day window contains every weekday
+}
+
+/** The `planning_today` setting the UI opens its projection on. */
+function planningTodaySetting(today: IsoDate): Setting {
+  return {
+    key: SETTING_KEYS.PLANNING_TODAY,
+    scope: 'global',
+    scopeId: null,
+    value: JSON.stringify(today),
   };
 }
 

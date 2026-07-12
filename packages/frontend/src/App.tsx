@@ -5,7 +5,13 @@ import { StatusStrip } from './components/StatusStrip';
 import { Timeline } from './components/Timeline';
 import { WorkItemList } from './components/WorkItemList';
 import { loadDataset, type DatasetSource } from './data/loadDataset';
+import { formatDate } from './lib/format';
 import { runScenario, scopeEpic, type Scenario } from './lib/projection';
+
+/** Today's date as an ISO `YYYY-MM-DD` string (UTC). */
+function currentIsoDate(): string {
+  return new Date().toISOString().slice(0, 10);
+}
 
 export function App() {
   const [state, setState] = useState<
@@ -40,7 +46,8 @@ function Planner({ dataset, source }: { dataset: DomainDataset; source: DatasetS
   const scope = useMemo(() => scopeEpic(dataset, epicKey), [dataset, epicKey]);
 
   const initialScenario = (): Scenario => ({
-    today: scope.team.sprintAnchorDate,
+    // Demo data pins a reproducible "today"; real data uses the actual date.
+    today: scope.planningToday ?? currentIsoDate(),
     cutItemKeys: new Set(),
     doneItemKeys: new Set(),
     greenMinBufferDays: scope.defaults.greenMinBufferDays,
@@ -85,8 +92,8 @@ function Planner({ dataset, source }: { dataset: DomainDataset; source: DatasetS
       <div className="panel">
         <Timeline scope={scope} result={result} today={scenario.today} />
         <p className="footnote">
-          Gating relevant day: <strong>{scope.gating.name}</strong> on {scope.gating.date}. The
-          projection re-runs on every change below.
+          Gating relevant day: <strong>{scope.gating.name}</strong> on{' '}
+          {formatDate(scope.gating.date)}. The projection re-runs on every change below.
         </p>
       </div>
 

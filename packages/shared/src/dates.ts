@@ -2,6 +2,21 @@ import type { IsoDate, Weekday } from './domain.js';
 
 const MS_PER_DAY = 86_400_000;
 
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const WEEKDAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/** Canonical human date, e.g. `"Sun Jul 12, 2026"`. */
+export function formatHumanDate(date: IsoDate): string {
+  const dt = parseIso(date);
+  return `${WEEKDAY_NAMES[dt.getUTCDay()]} ${MONTH_NAMES[dt.getUTCMonth()]} ${dt.getUTCDate()}, ${dt.getUTCFullYear()}`;
+}
+
+/** Human date without the year, e.g. `"Sun Jul 12"`. */
+export function formatHumanDateShort(date: IsoDate): string {
+  const dt = parseIso(date);
+  return `${WEEKDAY_NAMES[dt.getUTCDay()]} ${MONTH_NAMES[dt.getUTCMonth()]} ${dt.getUTCDate()}`;
+}
+
 /** Parse an ISO `YYYY-MM-DD` date into a UTC `Date` at midnight. */
 export function parseIso(date: IsoDate): Date {
   const [y, m, d] = date.split('-').map(Number) as [number, number, number];

@@ -1,7 +1,7 @@
 import type { IsoDate } from '@ecp/shared';
 import type { ProjectionResult } from '@ecp/engine';
 import type { EpicScope } from '../lib/projection';
-import { formatDay, formatMonth } from '../lib/format';
+import { formatDayShort, formatMonth } from '../lib/format';
 import { computeDomain, makeScale, monthTicks } from '../lib/timeline';
 
 interface TimelineProps {
@@ -96,7 +96,7 @@ function Marker({
     <div className="marker-label">
       {label}
       <br />
-      <span className="marker-date">{formatDay(date)}</span>
+      <span className="marker-date">{formatDayShort(date)}</span>
     </div>
   );
   const lineEl = <div className="marker-line" />;
