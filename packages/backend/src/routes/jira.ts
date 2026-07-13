@@ -187,10 +187,11 @@ export function registerJiraRoutes(
   app.get('/api/jira/boards', async (req) => {
     const q = (req.query ?? {}) as { q?: string };
     try {
-      const boards = await client().listBoards();
+      const query = (q.q ?? '').trim();
+      const boards = await client().listBoards(undefined, query);
       return {
         boards: boards
-          .filter((b) => matches(b.name, q.q))
+          .filter((b) => matches(b.name, query))
           .slice(0, 25)
           .map((b) => ({ id: b.id, name: b.name, type: b.type, projectKey: b.location?.projectKey ?? null })),
       };

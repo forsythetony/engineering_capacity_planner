@@ -4,7 +4,7 @@ import * as api from '../data/api';
 import type { DatasetSource } from '../data/loadDataset';
 import { colorFor, memberColorMap } from '../lib/memberColors';
 import { formatDayShort } from '../lib/format';
-import { buildGanttView, ganttCell, type GanttView, type MemberWeekCapacity } from '../lib/gantt';
+import { buildGanttView, ganttCell, ganttSprintEnd, type GanttView, type MemberWeekCapacity } from '../lib/gantt';
 import type { EpicScope } from '../lib/projection';
 import { MemberAvatar } from './MemberAvatar';
 import { WorkCard, type CardAssignee } from './WorkCard';
@@ -18,6 +18,25 @@ const slug = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').
 /** The key a drag carries. */
 const DND_KEY = 'text/plain';
 
+function localTodayIso(): string {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function defaultSprintId(scope: EpicScope): string | null {
+  const today = scope.planningToday ?? localTodayIso();
+  const current = scope.sprints.find((s) => {
+    const end = ganttSprintEnd(s, scope.team.sprintLengthDays);
+    return s.startDate <= today && today <= end;
+  });
+  if (current) return current.id;
+  const next = scope.sprints.find((s) => s.startDate > today);
+  return next?.id ?? scope.sprints.at(-1)?.id ?? null;
+}
+
 /**
  * The Gantt Planner tab (project plan §6a). Zooms into a sprint and breaks it
  * out week by week: each week column carries a green/yellow/red capacity
@@ -30,7 +49,7 @@ const DND_KEY = 'text/plain';
  * works — and e2e still passes — offline.
  */
 export function GanttBoard({ scope, source }: { scope: EpicScope; source: DatasetSource }) {
-  const [sprintId, setSprintId] = useState<string | null>(scope.sprints[0]?.id ?? null);
+  const [sprintId, setSprintId] = useState<string | null>(() => defaultSprintId(scope));
   const [openMemberId, setOpenMemberId] = useState<string | null>(null);
   const [placements, setPlacements] = useState<PlannedPlacement[]>(scope.placements);
   const [dragOverWeek, setDragOverWeek] = useState<number | null>(null);
@@ -38,6 +57,10 @@ export function GanttBoard({ scope, source }: { scope: EpicScope; source: Datase
 
   // Re-sync when the underlying dataset changes (e.g. after a reload).
   useEffect(() => setPlacements(scope.placements), [scope.placements]);
+  useEffect(() => {
+    if (sprintId && scope.sprints.some((s) => s.id === sprintId)) return;
+    setSprintId(defaultSprintId(scope));
+  }, [scope, sprintId]);
 
   const liveScope = useMemo(() => ({ ...scope, placements }), [scope, placements]);
   const view = useMemo(() => buildGanttView(liveScope, sprintId), [liveScope, sprintId]);
@@ -143,7 +166,7 @@ export function GanttBoard({ scope, source }: { scope: EpicScope; source: Datase
             >
               {scope.sprints.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.name} · {formatDayShort(s.startDate)}–{formatDayShort(s.endDate)}
+                  {s.name} · {formatDayShort(s.startDate)}–{formatDayShort(ganttSprintEnd(s, scope.team.sprintLengthDays))}
                 </option>
               ))}
             </select>

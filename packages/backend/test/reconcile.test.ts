@@ -144,6 +144,71 @@ describe('reconcileDataset', () => {
     });
   });
 
+  it('fills unplaced work from Jira sprint placements without overwriting manual slots', () => {
+    const current: DomainDataset = {
+      ...empty(),
+      teams: [team('T', '2026-01-27')],
+      sprints: [sprint('21')],
+      workItems: [workItem('CKT-1', 'To Do'), workItem('CKT-2', 'To Do')],
+      placements: [placement('manual-1', 'CKT-1', '21')],
+    };
+    const incoming: DomainDataset = {
+      ...empty(),
+      teams: [team('T', '2026-01-27')],
+      sprints: [sprint('21')],
+      epics: [{ key: 'CKT', title: 'Checkout', teamId: 'T' }],
+      stories: [{ key: 'S1', epicKey: 'CKT', title: 'Story' }],
+      workItems: [workItem('CKT-1', 'To Do'), workItem('CKT-2', 'To Do')],
+      placements: [
+        { id: 'jira-CKT-1-sprint', workItemKey: 'CKT-1', sprintId: '21', weekIndex: 1 },
+        { id: 'jira-CKT-2-sprint', workItemKey: 'CKT-2', sprintId: '21', weekIndex: 1 },
+      ],
+    };
+
+    const { merged, summary, changes } = reconcileDataset(current, incoming);
+
+    expect(merged.placements).toEqual([
+      placement('manual-1', 'CKT-1', '21'),
+      { id: 'jira-CKT-2-sprint', workItemKey: 'CKT-2', sprintId: '21', weekIndex: 1 },
+    ]);
+    expect(summary.placementsAddedFromJira).toBe(1);
+    expect(changes).toContainEqual({
+      category: 'placement-added',
+      entity: 'CKT-2',
+      detail: 'Placed from Jira sprint assignment into sprint 21, week 2',
+    });
+  });
+
+  it('logs a conflict when Jira sprint placement disagrees with a local slot', () => {
+    const current: DomainDataset = {
+      ...empty(),
+      teams: [team('T', '2026-01-27')],
+      sprints: [sprint('21'), sprint('22')],
+      workItems: [workItem('CKT-1', 'To Do')],
+      placements: [placement('manual-1', 'CKT-1', '21')],
+    };
+    const incoming: DomainDataset = {
+      ...empty(),
+      teams: [team('T', '2026-01-27')],
+      sprints: [sprint('21'), sprint('22')],
+      epics: [{ key: 'CKT', title: 'Checkout', teamId: 'T' }],
+      stories: [{ key: 'S1', epicKey: 'CKT', title: 'Story' }],
+      workItems: [workItem('CKT-1', 'To Do')],
+      placements: [{ id: 'jira-CKT-1-sprint', workItemKey: 'CKT-1', sprintId: '22', weekIndex: 1 }],
+    };
+
+    const { merged, summary, changes } = reconcileDataset(current, incoming);
+
+    expect(merged.placements).toEqual([placement('manual-1', 'CKT-1', '21')]);
+    expect(summary.placementConflicts).toBe(1);
+    expect(changes).toContainEqual({
+      category: 'placement-conflict',
+      entity: 'CKT-1',
+      detail:
+        'Ticket CKT-1 has moved in Jira to sprint 22, week 2, but conflicts with local placement in sprint 21, week 1',
+    });
+  });
+
   it('emits an itemized change log for the sync-log UI', () => {
     const current: DomainDataset = {
       ...empty(),

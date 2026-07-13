@@ -238,9 +238,13 @@ export class FakeJiraClient implements JiraClient {
     return (issue) => preds.every((p) => p(issue));
   }
 
-  async listBoards(projectKeyOrId?: string): Promise<JiraBoard[]> {
-    void projectKeyOrId;
-    return this.boards.map((b) => ({ ...b }));
+  async listBoards(projectKeyOrId?: string, name?: string): Promise<JiraBoard[]> {
+    const project = projectKeyOrId?.trim().toLowerCase();
+    const q = name?.trim().toLowerCase();
+    return this.boards
+      .filter((b) => !project || b.location?.projectKey?.toLowerCase() === project)
+      .filter((b) => !q || b.name.toLowerCase().includes(q))
+      .map((b) => ({ ...b }));
   }
 
   async listSprints(boardId: number): Promise<JiraSprint[]> {

@@ -19,6 +19,10 @@ export interface ReconcileSummary {
   placementsDroppedMissingItem: number;
   /** Placements dropped because their sprint no longer exists in Jira. */
   placementsDroppedMissingSprint: number;
+  /** Previously-unplaced work slotted from Jira sprint assignments. */
+  placementsAddedFromJira: number;
+  /** Jira sprint assignments that disagree with preserved local placements. */
+  placementConflicts: number;
 }
 
 export interface ReconcileResult {
@@ -146,7 +150,8 @@ export function reconcileDataset(current: DomainDataset, incoming: DomainDataset
     }
   }
 
-  // --- Placements: preserve intent, pruning stale / completed slots.
+  // --- Placements: preserve local intent, pruning stale / completed slots, then
+  //     fill unplaced work from Jira sprint assignments when available.
   const incomingItems = new Map(remappedWorkItems.map((w) => [w.key, w]));
   const incomingSprintIds = new Set(incoming.sprints.map((s) => s.id));
   const keptPlacements: PlannedPlacement[] = [];
@@ -167,6 +172,38 @@ export function reconcileDataset(current: DomainDataset, incoming: DomainDataset
     } else {
       keptPlacements.push(p);
     }
+  }
+  const placedKeys = new Set(keptPlacements.map((p) => p.workItemKey));
+  const keptPlacementByItem = new Map(keptPlacements.map((p) => [p.workItemKey, p]));
+  let placementsAddedFromJira = 0;
+  let placementConflicts = 0;
+  for (const p of incoming.placements) {
+    const item = incomingItems.get(p.workItemKey);
+    if (!item || item.status === 'Done') continue;
+    if (!incomingSprintIds.has(p.sprintId)) continue;
+    const existing = keptPlacementByItem.get(p.workItemKey);
+    if (existing) {
+      if (existing.sprintId !== p.sprintId || existing.weekIndex !== p.weekIndex) {
+        placementConflicts += 1;
+        changes.push({
+          category: 'placement-conflict',
+          entity: p.workItemKey,
+          detail:
+            `Ticket ${p.workItemKey} has moved in Jira to sprint ${p.sprintId}, week ${p.weekIndex + 1}, ` +
+            `but conflicts with local placement in sprint ${existing.sprintId}, week ${existing.weekIndex + 1}`,
+        });
+      }
+      continue;
+    }
+    keptPlacements.push(p);
+    placedKeys.add(p.workItemKey);
+    keptPlacementByItem.set(p.workItemKey, p);
+    placementsAddedFromJira += 1;
+    changes.push({
+      category: 'placement-added',
+      entity: p.workItemKey,
+      detail: `Placed from Jira sprint assignment into sprint ${p.sprintId}, week ${p.weekIndex + 1}`,
+    });
   }
 
   // --- Local intent kept as-is (with FK safety filters).
@@ -216,6 +253,8 @@ export function reconcileDataset(current: DomainDataset, incoming: DomainDataset
       placementsPulledDone,
       placementsDroppedMissingItem,
       placementsDroppedMissingSprint,
+      placementsAddedFromJira,
+      placementConflicts,
     },
   };
 }

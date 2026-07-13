@@ -1,6 +1,6 @@
 import type { WorkItem } from '@ecp/shared';
 import type { EpicScope, Scenario } from '../lib/projection';
-import { JiraLink } from './JiraLink';
+import { JiraKeyLink } from './JiraLink';
 
 interface WorkItemListProps {
   scope: EpicScope;
@@ -39,8 +39,7 @@ export function WorkItemList({ scope, scenario }: WorkItemListProps) {
                   data-testid={`work-item-${item.key}`}
                 >
                   <span>
-                    <strong>{item.key}</strong>
-                    <JiraLink jiraKey={item.key} />
+                    <JiraKeyLink jiraKey={item.key} />
                     {' '}
                     {item.title}
                   </span>

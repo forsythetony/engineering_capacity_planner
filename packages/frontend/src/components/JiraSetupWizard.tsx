@@ -7,6 +7,7 @@ import { MemberAvatar } from './MemberAvatar';
 import { JiraFieldMapper } from './JiraFieldMapper';
 import { TicketFieldModal } from './TicketFieldModal';
 import { Typeahead } from './Typeahead';
+import { JiraKeyLink } from './JiraLink';
 
 /** Read a JSON-encoded global setting, or `fallback` when absent. */
 function settingValue<T>(dataset: DomainDataset, key: string, fallback: T): T {
@@ -18,7 +19,7 @@ type Run = (fn: () => Promise<unknown>) => Promise<void>;
 
 interface WizardProps {
   dataset: DomainDataset;
-  teamId: string;
+  teamId: string | null;
   members: TeamMember[];
   disabled: boolean;
   run: Run;
@@ -53,7 +54,7 @@ export function JiraSetupWizard({ dataset, teamId, members, disabled, run, onRel
     board: boardId !== null,
     epic: epicKey !== null,
     fields: mapped,
-    members: members.some((m) => m.jiraAccountId),
+    members: teamId !== null && members.some((m) => m.jiraAccountId),
   };
 
   // First unfinished step is the natural landing spot.
@@ -170,41 +171,68 @@ function BoardStep({ dataset, projectKey, boardId, disabled, run, onNext }: {
 }) {
   const [text, setText] = useState('');
   const currentName = settingValue<string | null>(dataset, SETTING_KEYS.JIRA_BOARD_NAME, null);
+  const clearBoard = () => {
+    setText('');
+    run(() =>
+      api.patchSettings({
+        [SETTING_KEYS.JIRA_BOARD_ID]: null,
+        [SETTING_KEYS.JIRA_BOARD_NAME]: null,
+        [SETTING_KEYS.JIRA_PROJECT_KEY]: null,
+        [SETTING_KEYS.JIRA_EPIC_KEY]: null,
+        [SETTING_KEYS.JIRA_STORY_POINTS_FIELD]: null,
+        [SETTING_KEYS.JIRA_SPRINT_FIELD]: null,
+        [SETTING_KEYS.JIRA_LABELS_FIELD]: null,
+      }),
+    );
+  };
 
   return (
     <div data-testid="wizard-board">
       <p className="hint wizard-help">Search your Agile boards and pick the one this plan tracks.</p>
       {boardId && (
         <div className="wizard-current" data-testid="wizard-board-current">
-          Selected board: <strong>{currentName ?? `#${boardId}`}</strong>
-          {projectKey ? <> · project <code>{projectKey}</code></> : null}
+          <span>
+            Selected board: <strong>{currentName ?? `#${boardId}`}</strong>
+            {projectKey ? <> · project <code>{projectKey}</code></> : null}
+          </span>
+          <button
+            type="button"
+            className="wizard-clear"
+            aria-label="Clear selected board"
+            disabled={disabled}
+            onClick={clearBoard}
+          >
+            ×
+          </button>
         </div>
       )}
-      <Typeahead
-        value={text}
-        onChange={setText}
-        disabled={disabled}
-        searchOnEmpty
-        placeholder="Search boards…"
-        testId="wizard-board-search"
-        search={(q) =>
-          api.searchJiraBoards(q).then((r) =>
-            r.boards.map((b) => ({ id: String(b.id), label: b.name, hint: b.projectKey ?? b.type, board: b })),
-          )
-        }
-        onSelect={(opt) => {
-          const b = (opt as { board: api.JiraBoardOption }).board;
-          setText('');
-          run(() =>
-            api.patchSettings({
-              [SETTING_KEYS.JIRA_BOARD_ID]: String(b.id),
-              [SETTING_KEYS.JIRA_BOARD_NAME]: b.name,
-              // A board carries its project; setting it unlocks epic + sample.
-              ...(b.projectKey ? { [SETTING_KEYS.JIRA_PROJECT_KEY]: b.projectKey } : {}),
-            }),
-          );
-        }}
-      />
+      {!boardId && (
+        <Typeahead
+          value={text}
+          onChange={setText}
+          disabled={disabled}
+          searchOnEmpty
+          placeholder="Search boards…"
+          testId="wizard-board-search"
+          search={(q) =>
+            api.searchJiraBoards(q).then((r) =>
+              r.boards.map((b) => ({ id: String(b.id), label: b.name, hint: b.projectKey ?? b.type, board: b })),
+            )
+          }
+          onSelect={(opt) => {
+            const b = (opt as { board: api.JiraBoardOption }).board;
+            setText('');
+            run(() =>
+              api.patchSettings({
+                [SETTING_KEYS.JIRA_BOARD_ID]: String(b.id),
+                [SETTING_KEYS.JIRA_BOARD_NAME]: b.name,
+                // A board carries its project; setting it unlocks epic + sample.
+                ...(b.projectKey ? { [SETTING_KEYS.JIRA_PROJECT_KEY]: b.projectKey } : {}),
+              }),
+            );
+          }}
+        />
+      )}
       <div className="wizard-nav">
         <button type="button" className="btn" disabled={!boardId} onClick={onNext} data-testid="wizard-board-next">
           Next: pick an epic →
@@ -221,6 +249,10 @@ function EpicStep({ projectKey, epicKey, disabled, run, onNext }: {
   projectKey: string | null; epicKey: string | null; disabled: boolean; run: Run; onNext: () => void;
 }) {
   const [text, setText] = useState('');
+  const clearEpic = () => {
+    setText('');
+    run(() => api.patchSettings({ [SETTING_KEYS.JIRA_EPIC_KEY]: null }));
+  };
   return (
     <div data-testid="wizard-epic">
       <p className="hint wizard-help">
@@ -230,26 +262,39 @@ function EpicStep({ projectKey, epicKey, disabled, run, onNext }: {
       {!projectKey && <div className="config-error">Pick a board first so we know which project to search.</div>}
       {epicKey && (
         <div className="wizard-current" data-testid="wizard-epic-current">
-          Tracking epic: <code>{epicKey}</code>
+          <span>
+            Tracking epic: <JiraKeyLink jiraKey={epicKey} />
+          </span>
+          <button
+            type="button"
+            className="wizard-clear"
+            aria-label="Clear selected epic"
+            disabled={disabled}
+            onClick={clearEpic}
+          >
+            ×
+          </button>
         </div>
       )}
-      <Typeahead
-        value={text}
-        onChange={setText}
-        disabled={disabled || !projectKey}
-        searchOnEmpty
-        placeholder="Search epics…"
-        testId="wizard-epic-search"
-        search={(q) =>
-          api.searchJiraEpics({ project: projectKey ?? undefined, q }).then((r) =>
-            r.epics.map((e) => ({ id: e.key, label: e.summary, hint: e.key })),
-          )
-        }
-        onSelect={(opt) => {
-          setText('');
-          run(() => api.patchSettings({ [SETTING_KEYS.JIRA_EPIC_KEY]: opt.id }));
-        }}
-      />
+      {!epicKey && (
+        <Typeahead
+          value={text}
+          onChange={setText}
+          disabled={disabled || !projectKey}
+          searchOnEmpty
+          placeholder="Search epics…"
+          testId="wizard-epic-search"
+          search={(q) =>
+            api.searchJiraEpics({ project: projectKey ?? undefined, q }).then((r) =>
+              r.epics.map((e) => ({ id: e.key, label: e.summary, hint: e.key })),
+            )
+          }
+          onSelect={(opt) => {
+            setText('');
+            run(() => api.patchSettings({ [SETTING_KEYS.JIRA_EPIC_KEY]: opt.id }));
+          }}
+        />
+      )}
       <div className="wizard-nav">
         <button type="button" className="btn" disabled={!epicKey} onClick={onNext} data-testid="wizard-epic-next">
           Next: map fields →
@@ -314,10 +359,11 @@ function FieldsStep({ dataset, projectKey, epicKey, disabled, run, onNext }: {
 // Members
 // ---------------------------------------------------------------------------
 function MembersStep({ teamId, members, disabled, run, onReload }: {
-  teamId: string; members: TeamMember[]; disabled: boolean; run: Run; onReload: () => Promise<void>;
+  teamId: string | null; members: TeamMember[]; disabled: boolean; run: Run; onReload: () => Promise<void>;
 }) {
   const colors = useMemo(() => memberColorMap(members), [members]);
   const [addText, setAddText] = useState('');
+  const memberControlsDisabled = disabled || teamId === null;
 
   return (
     <div data-testid="wizard-members">
@@ -325,13 +371,18 @@ function MembersStep({ teamId, members, disabled, run, onReload }: {
         Search Jira for teammates to add, or link people you already created to their Jira account so
         their assigned work maps onto them.
       </p>
+      {teamId === null && (
+        <div className="wizard-current" data-testid="wizard-members-pending">
+          Team members become editable after the first Jira sync creates the local team.
+        </div>
+      )}
 
       <div className="control">
         <label>Add a teammate from Jira</label>
         <Typeahead
           value={addText}
           onChange={setAddText}
-          disabled={disabled}
+          disabled={memberControlsDisabled}
           searchOnEmpty
           placeholder="Search people…"
           testId="wizard-member-search"
@@ -344,6 +395,7 @@ function MembersStep({ teamId, members, disabled, run, onReload }: {
           )
           }
           onSelect={(opt) => {
+            if (teamId === null) return;
             setAddText('');
             run(async () => {
               await api.createMember({ teamId, name: opt.label, baseVelocity: 10, jiraAccountId: opt.id, avatarUrl: opt.imageUrl ?? null });

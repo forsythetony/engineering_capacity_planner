@@ -1,4 +1,5 @@
 import type { IsoDate, Sprint, TeamMember, WorkItem } from '@ecp/shared';
+import { addDays } from '@ecp/shared';
 import { buildCapacityContext, weeklyPlan, type WeekPlan } from '@ecp/engine';
 import type { EpicScope } from './projection';
 
@@ -57,6 +58,12 @@ export interface GanttView {
 
 const cellKey = (label: string, weekIndex: number): string => `${label}::${weekIndex}`;
 
+export function ganttSprintEnd(sprint: Sprint, sprintLengthDays: number): IsoDate {
+  if (!Number.isFinite(sprintLengthDays) || sprintLengthDays <= 0) return sprint.endDate;
+  const cadenceEnd = addDays(sprint.startDate, Math.max(1, Math.round(sprintLengthDays)) - 1);
+  return cadenceEnd < sprint.endDate ? cadenceEnd : sprint.endDate;
+}
+
 /** Build the Gantt view for one sprint. */
 export function buildGanttView(scope: EpicScope, sprintId: string | null): GanttView {
   const sprint = scope.sprints.find((s) => s.id === sprintId) ?? scope.sprints[0] ?? null;
@@ -94,7 +101,7 @@ export function buildGanttView(scope: EpicScope, sprintId: string | null): Gantt
   const weeks = sprint
     ? weeklyPlan({
         startDate: sprint.startDate,
-        endDate: sprint.endDate,
+        endDate: ganttSprintEnd(sprint, scope.team.sprintLengthDays),
         workingDays: scope.team.workingDays,
         capacityCtx: ctx,
         placedPointsByWeek,
@@ -140,6 +147,7 @@ function memberWeekCapacity(
   sprint: Sprint,
   scope: EpicScope,
 ): MemberWeekCapacity {
+  const sprintEnd = ganttSprintEnd(sprint, scope.team.sprintLengthDays);
   const soloCtx = buildCapacityContext({
     members: [member],
     pto: scope.pto.filter((p) => p.memberId === member.id),
@@ -149,7 +157,7 @@ function memberWeekCapacity(
   });
   const weeks = weeklyPlan({
     startDate: sprint.startDate,
-    endDate: sprint.endDate,
+    endDate: sprintEnd,
     workingDays: scope.team.workingDays,
     capacityCtx: soloCtx,
     placedPointsByWeek: new Map(),
@@ -159,7 +167,7 @@ function memberWeekCapacity(
   const total = Math.round(perWeek.reduce((a, b) => a + b, 0) * 100) / 100;
 
   const overlaps = (start: IsoDate, end: IsoDate): boolean =>
-    start <= sprint.endDate && end >= sprint.startDate;
+    start <= sprintEnd && end >= sprint.startDate;
   const notes: string[] = [];
   for (const p of scope.pto) {
     if (p.memberId === member.id && overlaps(p.startDate, p.endDate)) {

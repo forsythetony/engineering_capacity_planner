@@ -2,13 +2,14 @@ import type {
   Dependency,
   DomainDataset,
   Epic,
+  PlannedPlacement,
   Sprint,
   TeamMember,
   UserStory,
   WorkItem,
   WorkItemStatus,
 } from '@ecp/shared';
-import { CADENCE_DEFAULTS, defaultGlobalSettings } from '@ecp/shared';
+import { CADENCE_DEFAULTS, addDays, defaultGlobalSettings, diffDays, formatIso } from '@ecp/shared';
 import type { JiraMapping } from './mapping.js';
 import type { JiraIssue, JiraIssueFields, JiraSprint, JiraUser } from './types.js';
 
@@ -26,6 +27,8 @@ export interface JiraDatasetInput {
   mapping: JiraMapping;
   /** Anchor to fall back to when no sprint supplies a start date. */
   fallbackAnchorDate: string;
+  /** Date used to choose a week for active-sprint Jira placements. */
+  placementDate?: string;
 }
 
 /** Trim a Jira ISO *datetime* down to a calendar `YYYY-MM-DD`. */
@@ -33,6 +36,11 @@ function toIsoDate(datetime: string | undefined): string | null {
   if (!datetime) return null;
   const m = /^(\d{4}-\d{2}-\d{2})/.exec(datetime);
   return m ? m[1]! : null;
+}
+
+function sprintEndForCadence(start: string, end: string): string {
+  const cadenceEnd = addDays(start, CADENCE_DEFAULTS.SPRINT_LENGTH_DAYS - 1);
+  return cadenceEnd < end ? cadenceEnd : end;
 }
 
 /**
@@ -69,6 +77,67 @@ function labelsOf(fields: JiraIssueFields, mapping: JiraMapping): string[] {
 const assigneeOf = (fields: JiraIssueFields): JiraUser | null =>
   (fields.assignee as JiraUser | null | undefined) ?? null;
 
+function sprintIdsOf(raw: unknown): string[] {
+  const values = Array.isArray(raw) ? raw : raw == null ? [] : [raw];
+  const ids: string[] = [];
+  for (const v of values) {
+    if (typeof v === 'number' && Number.isFinite(v)) ids.push(String(v));
+    else if (typeof v === 'string') {
+      const direct = /^\d+$/.exec(v.trim());
+      if (direct) ids.push(v.trim());
+      const legacy = /(?:^|[,[\s])id=(\d+)(?:,|\]|$)/.exec(v);
+      if (legacy) ids.push(legacy[1]!);
+    } else if (typeof v === 'object' && v !== null && 'id' in v) {
+      const id = (v as { id?: unknown }).id;
+      if ((typeof id === 'number' && Number.isFinite(id)) || (typeof id === 'string' && id.trim() !== '')) {
+        ids.push(String(id));
+      }
+    }
+  }
+  return ids;
+}
+
+function sprintStateOf(raw: unknown, sprintId: string): JiraSprint['state'] | null {
+  const values = Array.isArray(raw) ? raw : raw == null ? [] : [raw];
+  for (const v of values) {
+    if (typeof v !== 'object' || v === null) continue;
+    const id = (v as { id?: unknown }).id;
+    if (String(id) !== sprintId) continue;
+    const state = (v as { state?: unknown }).state;
+    return state === 'future' || state === 'active' || state === 'closed' ? state : null;
+  }
+  return null;
+}
+
+function weekCount(sprint: Sprint): number {
+  return Math.max(1, Math.ceil((diffDays(sprint.startDate, sprint.endDate) + 1) / 7));
+}
+
+function weekIndexForSprint(sprint: Sprint, state: JiraSprint['state'] | null, placementDate: string): number {
+  const last = weekCount(sprint) - 1;
+  if (state === 'future') return 0;
+  if (state === 'closed') return last;
+  if (placementDate <= sprint.startDate) return 0;
+  if (placementDate >= sprint.endDate) return last;
+  return Math.min(last, Math.max(0, Math.floor(diffDays(sprint.startDate, placementDate) / 7)));
+}
+
+function latestSprintId(ids: string[], sprintsById: ReadonlyMap<string, Sprint>): string | null {
+  let latest: Sprint | null = null;
+  for (const id of ids) {
+    const sprint = sprintsById.get(id);
+    if (!sprint) continue;
+    if (
+      latest === null ||
+      sprint.startDate > latest.startDate ||
+      (sprint.startDate === latest.startDate && Number(sprint.id) > Number(latest.id))
+    ) {
+      latest = sprint;
+    }
+  }
+  return latest?.id ?? null;
+}
+
 /** Pick a reasonably-sized avatar URL from Jira's size-keyed map, or null. */
 export function pickAvatarUrl(user: Pick<JiraUser, 'avatarUrls'> | null | undefined): string | null {
   const urls = user?.avatarUrls;
@@ -79,13 +148,16 @@ export function pickAvatarUrl(user: Pick<JiraUser, 'avatarUrls'> | null | undefi
 /**
  * Translate a bundle of raw Jira issues + sprints into a self-consistent
  * {@link DomainDataset} of *facts* (Jira owns these). Local *intent* — PTO,
- * on-call, velocity overrides, milestones, and Gantt placements — is left empty
- * here and preserved by the reconcile step, not by the importer.
+ * on-call, velocity overrides, and milestones — is left empty here and
+ * preserved by the reconcile step, not by the importer. Jira sprint assignments
+ * become best-effort suggested Gantt placements; reconcile only applies them to
+ * items the user has not already placed manually.
  *
  * Pure and deterministic: no clock, no I/O, so it is exhaustively unit-testable.
  */
 export function datasetFromJira(input: JiraDatasetInput): DomainDataset {
   const { epicIssue, storyIssues, workIssues, sprints, mapping } = input;
+  const placementDate = input.placementDate ?? formatIso(new Date());
 
   // --- Sprints (earliest start becomes the team's cadence anchor) ----------
   const teamId = `team-jira-${mapping.projectKey.toLowerCase()}`;
@@ -93,12 +165,15 @@ export function datasetFromJira(input: JiraDatasetInput): DomainDataset {
   let earliestStart: string | null = null;
   for (const s of sprints) {
     const start = toIsoDate(s.startDate);
-    const end = toIsoDate(s.endDate);
+    const rawEnd = toIsoDate(s.endDate);
+    const end = start && rawEnd ? sprintEndForCadence(start, rawEnd) : rawEnd;
     if (!start || !end) continue; // sprints without dates can't drive week columns
     if (earliestStart === null || start < earliestStart) earliestStart = start;
     domainSprints.push({ id: String(s.id), teamId, name: s.name, startDate: start, endDate: end });
   }
   domainSprints.sort((a, b) => a.startDate.localeCompare(b.startDate));
+  const domainSprintById = new Map(domainSprints.map((s) => [s.id, s]));
+  const rawSprintStateById = new Map(sprints.map((s) => [String(s.id), s.state]));
 
   const team = {
     id: teamId,
@@ -131,6 +206,7 @@ export function datasetFromJira(input: JiraDatasetInput): DomainDataset {
   // --- Work items & members ------------------------------------------------
   const members = new Map<string, TeamMember>();
   const workItems: WorkItem[] = [];
+  const placements: PlannedPlacement[] = [];
   const workItemKeys = new Set<string>();
 
   for (const issue of workIssues) {
@@ -161,6 +237,24 @@ export function datasetFromJira(input: JiraDatasetInput): DomainDataset {
       labels: labelsOf(issue.fields, mapping),
     });
     workItemKeys.add(issue.key);
+
+    if (mapping.sprintField && mapStatus(issue.fields) !== 'Done') {
+      const rawSprint = issue.fields[mapping.sprintField];
+      const sprintId = latestSprintId(sprintIdsOf(rawSprint), domainSprintById);
+      const sprint = sprintId ? domainSprintById.get(sprintId) : null;
+      if (sprint && sprintId) {
+        placements.push({
+          id: `jira-${issue.key}-sprint`,
+          workItemKey: issue.key,
+          sprintId,
+          weekIndex: weekIndexForSprint(
+            sprint,
+            sprintStateOf(rawSprint, sprintId) ?? rawSprintStateById.get(sprintId) ?? null,
+            placementDate,
+          ),
+        });
+      }
+    }
   }
 
   if (usedUngrouped) {
@@ -200,7 +294,7 @@ export function datasetFromJira(input: JiraDatasetInput): DomainDataset {
     workItems,
     dependencies,
     sprints: domainSprints,
-    placements: [],
+    placements,
     settings: defaultGlobalSettings(),
   };
 }

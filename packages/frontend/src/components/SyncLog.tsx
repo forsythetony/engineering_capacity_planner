@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import type { SyncChange, SyncLogEntry } from '@ecp/shared';
+import { parseJiraTicketKey } from '@ecp/shared';
 import { formatDate } from '../lib/format';
 import * as api from '../data/api';
+import { JiraKeyLink } from './JiraLink';
 
 /** Human label + accent for each change category, for the detail modal. */
 const CATEGORY_META: Record<SyncChange['category'], { label: string; tone: string }> = {
@@ -10,6 +12,8 @@ const CATEGORY_META: Record<SyncChange['category'], { label: string; tone: strin
   status: { label: 'Status', tone: 'blue' },
   points: { label: 'Points', tone: 'blue' },
   assignee: { label: 'Assignee', tone: 'blue' },
+  'placement-added': { label: 'Placed', tone: 'green' },
+  'placement-conflict': { label: 'Conflict', tone: 'red' },
   'placement-pulled': { label: 'Completed', tone: 'green' },
   'placement-dropped': { label: 'Unplaced', tone: 'red' },
   'member-added': { label: 'Teammate', tone: 'green' },
@@ -30,6 +34,8 @@ function headline(entry: SyncLogEntry): string {
   const s = entry.summary;
   const parts: string[] = [`${s.workItems ?? 0} items`];
   if (s.sprints) parts.push(`${s.sprints} sprints`);
+  if (s.placementsAddedFromJira) parts.push(`${s.placementsAddedFromJira} placed`);
+  if (s.placementConflicts) parts.push(`${s.placementConflicts} conflicts`);
   if (s.placementsPulledDone) parts.push(`${s.placementsPulledDone} completed`);
   if (s.membersAdded) parts.push(`+${s.membersAdded} ${s.membersAdded === 1 ? 'teammate' : 'teammates'}`);
   return parts.join(' · ');
@@ -137,7 +143,9 @@ function SyncLogModal({ entry, onClose }: { entry: SyncLogEntry; onClose: () => 
               return (
                 <li key={i} className="sync-change-row">
                   <span className={`sync-change-tag tone-${meta.tone}`}>{meta.label}</span>
-                  <code className="sync-change-entity">{c.entity}</code>
+                  <span className="sync-change-entity">
+                    {parseJiraTicketKey(c.entity) === c.entity ? <JiraKeyLink jiraKey={c.entity} /> : <code>{c.entity}</code>}
+                  </span>
                   <span className="sync-change-detail">{c.detail}</span>
                 </li>
               );

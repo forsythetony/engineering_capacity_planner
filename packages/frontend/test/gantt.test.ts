@@ -21,6 +21,28 @@ describe('buildGanttView', () => {
     expect(view.sprint!.id).toBe(target.id);
   });
 
+  it('caps Jira-style boundary slivers to the team cadence', () => {
+    const jiraStyleScope = {
+      ...scope,
+      sprints: [
+        {
+          ...scope.sprints[0]!,
+          id: 'jira-style',
+          startDate: '2026-07-17',
+          endDate: '2026-07-31',
+        },
+      ],
+      placements: [],
+    };
+
+    const view = buildGanttView(jiraStyleScope, 'jira-style');
+
+    expect(view.weeks.map((w) => [w.start, w.end])).toEqual([
+      ['2026-07-17', '2026-07-23'],
+      ['2026-07-24', '2026-07-30'],
+    ]);
+  });
+
   it('derives lanes from labels, biggest subdivision first', () => {
     const view = buildGanttView(scope, scope.sprints[0]!.id);
     expect(view.lanes.length).toBeGreaterThan(0);

@@ -32,6 +32,14 @@ function relativeAge(lastSyncedMs: number | null, nowMs: number): string {
   return `${Math.floor(age / DAY_MS)} d ago`;
 }
 
+function missingJiraSetup(settings: DomainDataset['settings']): string[] {
+  const missing: string[] = [];
+  if (!globalStringSetting(settings, SETTING_KEYS.JIRA_PROJECT_KEY)) missing.push('project');
+  if (!globalStringSetting(settings, SETTING_KEYS.JIRA_STORY_POINTS_FIELD)) missing.push('story points');
+  if (!globalStringSetting(settings, SETTING_KEYS.JIRA_BLOCKS_LINK_TYPE)) missing.push('blocking link type');
+  return missing;
+}
+
 interface SyncButtonProps {
   dataset: DomainDataset;
   source: DatasetSource;
@@ -60,6 +68,7 @@ export function SyncButton({ dataset, source, onReload, onGoToSetup }: SyncButto
   // Locked until the mapping is complete against a live backend (bundled sample
   // data has no backend to sync to).
   const configured = source === 'api' && isMappingComplete(dataset.settings);
+  const missingSetup = source === 'api' ? missingJiraSetup(dataset.settings) : [];
 
   const lastIso = globalStringSetting(dataset.settings, SETTING_KEYS.LAST_SYNCED_AT);
   const lastMs = lastIso ? Date.parse(lastIso) : null;
@@ -77,6 +86,8 @@ export function SyncButton({ dataset, source, onReload, onGoToSetup }: SyncButto
         `Synced ${s.workItems ?? 0} items` +
           (s.sprints ? ` · ${s.sprints} sprints` : '') +
           (s.placementsPulledDone ? ` · pulled ${s.placementsPulledDone} done` : '') +
+          (s.placementsAddedFromJira ? ` · placed ${s.placementsAddedFromJira} from Jira sprints` : '') +
+          (s.placementConflicts ? ` · ${s.placementConflicts} placement conflicts` : '') +
           (s.membersAdded ? ` · +${s.membersAdded} members` : ''),
       );
       await onReload();
@@ -120,7 +131,7 @@ export function SyncButton({ dataset, source, onReload, onGoToSetup }: SyncButto
             <p>
               {source !== 'api'
                 ? 'You’re viewing bundled sample data. Start the backend and connect a Jira board to enable syncing.'
-                : 'Sync is locked until you’ve connected a board and mapped the required fields (project, story points, and the “blocks” link type).'}
+                : `Sync is locked until you’ve connected a board and mapped the required fields. Missing: ${missingSetup.join(', ') || 'unknown'}.`}
             </p>
             <div className="modal-actions">
               <button type="button" className="btn" onClick={() => setShowLocked(false)}>

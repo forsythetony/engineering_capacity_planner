@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { EpicScope, Scenario } from '../lib/projection';
 import { buildGraphLayout, type LayoutEdge, type LayoutNode } from '../lib/graph';
-import { JIRA_ICON_PATHS } from './JiraLink';
+import { JIRA_ICON_PATHS, JiraKeyLink, jiraIssueHref } from './JiraLink';
 
 interface DependencyGraphProps {
   scope: EpicScope;
@@ -128,19 +128,26 @@ export function DependencyGraph({ scope, scenario }: DependencyGraphProps) {
         <ol className="leverage-list" data-testid="leverage-list">
           {topBlockers.map((n) => (
             <li key={n.key} data-testid={`leverage-${n.key}`}>
-              <button
-                type="button"
+              <div
+                role="button"
+                tabIndex={0}
                 className="leverage-row"
                 onClick={() => setFocusKey(n.key)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setFocusKey(n.key);
+                  }
+                }}
                 title={`Focus the graph on ${n.key}`}
               >
                 <span className="badge high-leverage">unblocks {n.transitiveDependents}</span>
-                <strong>{n.key}</strong>
+                <JiraKeyLink jiraKey={n.key} />
                 <span className="leverage-title">{titleByKey.get(n.key)}</span>
                 <span className="hint">
                   {n.directDependents} direct · {n.transitiveDependents} total
                 </span>
-              </button>
+              </div>
             </li>
           ))}
         </ol>
@@ -222,39 +229,41 @@ function GraphNode({ node, onFocus }: { node: LayoutNode; onFocus: (key: string)
       <text x={node.width - 10} y={39} className="node-metrics" textAnchor="end">
         {metrics}
       </text>
-      <NodeJiraLink jiraKey={node.key} x={node.width - 24} y={8} />
+      <NodeJiraLink jiraKey={node.key} x={Math.min(node.width - 24, 13 + node.key.length * 8)} y={8} />
     </g>
   );
 }
 
-/** The shared Jira glyph, rendered inline in an SVG node (inert for now). */
+/** The shared Jira glyph, rendered inline in an SVG node. */
 function NodeJiraLink({ jiraKey, x, y }: { jiraKey: string; x: number; y: number }) {
   const scale = 14 / 24;
   return (
-    <g
-      className="node-jira jira-link inert"
-      transform={`translate(${x}, ${y}) scale(${scale})`}
-      role="link"
+    <a
+      className="node-jira jira-link"
+      href={jiraIssueHref(jiraKey)}
+      target="_blank"
+      rel="noreferrer"
       aria-label={`Open ${jiraKey} in Jira`}
       data-testid={`jira-link-${jiraKey}`}
-      // The icon is inert; swallow the click so it doesn't also focus the node.
       onClick={(e) => e.stopPropagation()}
     >
-      <title>{`Open ${jiraKey} in Jira (not yet linked)`}</title>
-      {/* Invisible hit target so the whole glyph box is clickable. */}
-      <rect x={-2} y={-2} width={28} height={28} fill="transparent" />
-      {JIRA_ICON_PATHS.map((d) => (
-        <path
-          key={d}
-          d={d}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      ))}
-    </g>
+      <g transform={`translate(${x}, ${y}) scale(${scale})`}>
+        <title>{`Open ${jiraKey} in Jira`}</title>
+        {/* Invisible hit target so the whole glyph box is clickable. */}
+        <rect x={-2} y={-2} width={28} height={28} fill="transparent" />
+        {JIRA_ICON_PATHS.map((d) => (
+          <path
+            key={d}
+            d={d}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        ))}
+      </g>
+    </a>
   );
 }
 

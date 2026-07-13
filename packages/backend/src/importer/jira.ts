@@ -1,4 +1,5 @@
 import type { DomainDataset, Importer } from '@ecp/shared';
+import { formatIso } from '@ecp/shared';
 import type { JiraClient } from '../jira/client.js';
 import { datasetFromJira } from '../jira/mapper.js';
 import type { JiraMapping } from '../jira/mapping.js';
@@ -98,6 +99,7 @@ export class JiraImporter implements Importer {
       sprints,
       mapping: this.mapping,
       fallbackAnchorDate: this.fallbackAnchorDate,
+      placementDate: formatIso(new Date()),
     });
   }
 }

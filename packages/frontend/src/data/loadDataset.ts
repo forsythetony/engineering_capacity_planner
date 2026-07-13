@@ -18,11 +18,23 @@ export function loadBundledDataset(): DomainDataset {
 }
 
 function looksLikeDataset(value: unknown): value is DomainDataset {
+  const data = value as Partial<Record<keyof DomainDataset, unknown>>;
   return (
     typeof value === 'object' &&
     value !== null &&
-    Array.isArray((value as DomainDataset).epics) &&
-    (value as DomainDataset).epics.length > 0
+    Array.isArray(data.teams) &&
+    Array.isArray(data.members) &&
+    Array.isArray(data.velocityOverrides) &&
+    Array.isArray(data.pto) &&
+    Array.isArray(data.oncall) &&
+    Array.isArray(data.epics) &&
+    Array.isArray(data.milestones) &&
+    Array.isArray(data.stories) &&
+    Array.isArray(data.workItems) &&
+    Array.isArray(data.dependencies) &&
+    Array.isArray(data.sprints) &&
+    Array.isArray(data.placements) &&
+    Array.isArray(data.settings)
   );
 }
 

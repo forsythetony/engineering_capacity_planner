@@ -15,8 +15,8 @@ import { DatabaseTools } from './DatabaseTools';
 
 interface ConfigurationProps {
   dataset: DomainDataset;
-  teamId: string;
-  epicKey: string;
+  teamId: string | null;
+  epicKey: string | null;
   /** True when a live backend is connected; edits are disabled otherwise. */
   editable: boolean;
   /** Re-fetch the dataset after a successful mutation so views recompute. */
@@ -61,8 +61,8 @@ function useConfigActions(onReload: () => Promise<void>) {
 export function Configuration({ dataset, teamId, epicKey, editable, onReload }: ConfigurationProps) {
   const { run, error, busy } = useConfigActions(onReload);
   const disabled = !editable || busy;
-  const team = dataset.teams.find((t) => t.id === teamId)!;
-  const members = dataset.members.filter((m) => m.teamId === teamId);
+  const team = teamId ? (dataset.teams.find((t) => t.id === teamId) ?? null) : null;
+  const members = teamId ? dataset.members.filter((m) => m.teamId === teamId) : [];
   const colors = useMemo(() => memberColorMap(members), [members]);
 
   return (
@@ -80,18 +80,22 @@ export function Configuration({ dataset, teamId, epicKey, editable, onReload }: 
       )}
 
       <KnobsSection dataset={dataset} disabled={disabled} run={run} />
-      <CadenceSection team={team} disabled={disabled} run={run} />
-      <MembersSection members={members} colors={colors} teamId={teamId} disabled={disabled} run={run} />
-      <ModifiersSection
-        dataset={dataset}
-        members={members}
-        colors={colors}
-        disabled={disabled}
-        editable={editable}
-        run={run}
-        onReload={onReload}
-      />
-      <MilestonesSection dataset={dataset} epicKey={epicKey} disabled={disabled} run={run} />
+      {team ? <CadenceSection team={team} disabled={disabled} run={run} /> : null}
+      {teamId ? (
+        <>
+          <MembersSection members={members} colors={colors} teamId={teamId} disabled={disabled} run={run} />
+          <ModifiersSection
+            dataset={dataset}
+            members={members}
+            colors={colors}
+            disabled={disabled}
+            editable={editable}
+            run={run}
+            onReload={onReload}
+          />
+        </>
+      ) : null}
+      {epicKey ? <MilestonesSection dataset={dataset} epicKey={epicKey} disabled={disabled} run={run} /> : null}
       <JiraSetupWizard
         dataset={dataset}
         teamId={teamId}

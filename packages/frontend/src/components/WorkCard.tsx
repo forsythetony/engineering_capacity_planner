@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { WorkItem } from '@ecp/shared';
 import { MemberAvatar } from './MemberAvatar';
+import { JiraKeyLink } from './JiraLink';
 
 export interface CardAssignee {
   name: string;
@@ -61,7 +62,7 @@ export function WorkCard({ item, assignee, variant, testId, onDragStart }: WorkC
         ) : (
           <span className="work-card-unassigned" title="Unassigned" />
         )}
-        <strong className="work-card-key">{item.key}</strong>
+        <JiraKeyLink jiraKey={item.key} className="work-card-key" />
         <span className="work-card-pts">{item.points}p</span>
       </span>
       <span className="work-card-title">{item.title}</span>
@@ -75,7 +76,7 @@ export function WorkCard({ item, assignee, variant, testId, onDragStart }: WorkC
         >
           <span className="work-tooltip-title">{item.title}</span>
           <span className="work-tooltip-meta">
-            {item.key} · {item.points} pts · {item.status}
+            <JiraKeyLink jiraKey={item.key} /> · {item.points} pts · {item.status}
           </span>
           <span className="work-tooltip-meta">
             {assignee ? `Assignee: ${assignee.name}` : 'Unassigned'}

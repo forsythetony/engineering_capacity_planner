@@ -60,6 +60,8 @@ export interface SyncChange {
     | 'status'
     | 'points'
     | 'assignee'
+    | 'placement-added'
+    | 'placement-conflict'
     | 'placement-pulled'
     | 'placement-dropped'
     | 'member-added'

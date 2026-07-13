@@ -115,10 +115,66 @@ describe('datasetFromJira', () => {
     ];
     const ds = datasetFromJira(baseInput({ sprints }));
     expect(ds.sprints.map((s) => [s.id, s.startDate, s.endDate])).toEqual([
-      ['21', '2026-01-27', '2026-02-10'],
-      ['22', '2026-02-10', '2026-02-24'],
+      ['21', '2026-01-27', '2026-02-09'],
+      ['22', '2026-02-10', '2026-02-23'],
     ]);
     expect(ds.teams[0]!.sprintAnchorDate).toBe('2026-01-27');
+  });
+
+  it('suggests placements from Jira sprint fields using sprint state and date', () => {
+    const sprints: JiraSprint[] = [
+      { id: 21, name: 'Sprint 1', state: 'active', startDate: '2026-01-27T09:00:00.000+00:00', endDate: '2026-02-10T09:00:00.000+00:00' },
+      { id: 22, name: 'Sprint 2', state: 'future', startDate: '2026-02-10T09:00:00.000+00:00', endDate: '2026-02-24T09:00:00.000+00:00' },
+      { id: 23, name: 'Sprint 0', state: 'closed', startDate: '2026-01-13T09:00:00.000+00:00', endDate: '2026-01-27T09:00:00.000+00:00' },
+    ];
+    const ds = datasetFromJira(
+      baseInput({
+        sprints,
+        placementDate: '2026-02-04',
+        workIssues: [
+          issue('CKT-3', { parent: { key: 'CKT-2' }, customfield_10020: [{ id: 21, name: 'Sprint 1', state: 'active' }] }),
+          issue('CKT-4', { parent: { key: 'CKT-2' }, customfield_10020: [{ id: 22, name: 'Sprint 2', state: 'future' }] }),
+          issue('CKT-5', { parent: { key: 'CKT-2' }, customfield_10020: [{ id: 23, name: 'Sprint 0', state: 'closed' }] }),
+          issue('CKT-6', {
+            parent: { key: 'CKT-2' },
+            status: { name: 'Done', statusCategory: { key: 'done', name: 'Done' } },
+            customfield_10020: [{ id: 21, name: 'Sprint 1', state: 'active' }],
+          }),
+        ],
+      }),
+    );
+
+    expect(ds.placements).toEqual([
+      { id: 'jira-CKT-3-sprint', workItemKey: 'CKT-3', sprintId: '21', weekIndex: 1 },
+      { id: 'jira-CKT-4-sprint', workItemKey: 'CKT-4', sprintId: '22', weekIndex: 0 },
+      { id: 'jira-CKT-5-sprint', workItemKey: 'CKT-5', sprintId: '23', weekIndex: 1 },
+    ]);
+  });
+
+  it('chooses the latest matching sprint when a ticket has multiple sprint values', () => {
+    const sprints: JiraSprint[] = [
+      { id: 21, name: 'Sprint 1', state: 'closed', startDate: '2026-01-27T09:00:00.000+00:00', endDate: '2026-02-10T09:00:00.000+00:00' },
+      { id: 54, name: 'Sprint 54', state: 'active', startDate: '2026-07-08T09:00:00.000+00:00', endDate: '2026-07-22T09:00:00.000+00:00' },
+    ];
+    const ds = datasetFromJira(
+      baseInput({
+        sprints,
+        placementDate: '2026-07-13',
+        workIssues: [
+          issue('CKT-7', {
+            parent: { key: 'CKT-2' },
+            customfield_10020: [
+              { id: 54, name: 'Sprint 54', state: 'active' },
+              { id: 21, name: 'Sprint 1', state: 'closed' },
+            ],
+          }),
+        ],
+      }),
+    );
+
+    expect(ds.placements).toEqual([
+      { id: 'jira-CKT-7-sprint', workItemKey: 'CKT-7', sprintId: '54', weekIndex: 0 },
+    ]);
   });
 
   it('falls back to the provided anchor when no sprint has dates', () => {
@@ -135,7 +191,7 @@ describe('datasetFromJira', () => {
     expect(ds.stories.find((s) => s.key === 'CKT-1-UNGROUPED')).toBeTruthy();
   });
 
-  it('leaves intent layers (pto, oncall, placements, milestones) empty', () => {
+  it('leaves local-only intent layers (pto, oncall, milestones) empty', () => {
     const ds = datasetFromJira(baseInput());
     expect(ds.pto).toEqual([]);
     expect(ds.oncall).toEqual([]);

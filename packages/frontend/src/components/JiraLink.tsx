@@ -1,9 +1,6 @@
 /**
- * A small "open in Jira" link icon, reused across the header, backlog rows, and
- * dependency-graph nodes. It is intentionally inert for now: Jira wiring lands
- * in Phase 7 (the mapping settings already exist but no base URL is configured
- * yet), so with no `href` the icon renders as a non-navigating affordance. Pass
- * an `href` once a Jira base URL is available and it becomes a real link.
+ * Small Jira issue links, reused across the header, backlog rows, cards, logs,
+ * and dependency-graph nodes.
  */
 
 /**
@@ -16,18 +13,14 @@ export const JIRA_ICON_PATHS = [
   'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6',
 ] as const;
 
-interface JiraLinkProps {
-  /** The issue key this would open, e.g. `"CKT-2"` (also the epic key). */
-  jiraKey: string;
-  /** Destination once Jira is wired up; inert placeholder while `null`. */
-  href?: string | null;
-  className?: string;
+export const DEFAULT_JIRA_BASE_URL = 'https://chewyinc.atlassian.net';
+
+export function jiraIssueHref(jiraKey: string, baseUrl = DEFAULT_JIRA_BASE_URL): string {
+  return `${baseUrl.replace(/\/+$/, '')}/browse/${encodeURIComponent(jiraKey)}`;
 }
 
-/** HTML rendering — for the epic header and backlog rows. */
-export function JiraLink({ jiraKey, href = null, className }: JiraLinkProps) {
-  const label = `Open ${jiraKey} in Jira`;
-  const icon = (
+function JiraIcon() {
+  return (
     <svg
       viewBox="0 0 24 24"
       width="1em"
@@ -45,27 +38,53 @@ export function JiraLink({ jiraKey, href = null, className }: JiraLinkProps) {
       ))}
     </svg>
   );
+}
 
+interface JiraLinkProps {
+  /** The issue key this would open, e.g. `"CKT-2"` (also the epic key). */
+  jiraKey: string;
+  /** Destination override; defaults to the Chewy Jira browse URL. */
+  href?: string | null;
+  className?: string;
+}
+
+/** HTML rendering — for the epic header and backlog rows. */
+export function JiraLink({ jiraKey, href = jiraIssueHref(jiraKey), className }: JiraLinkProps) {
+  const label = `Open ${jiraKey} in Jira`;
   const cls = `jira-link${className ? ` ${className}` : ''}`;
 
-  if (href) {
-    return (
-      <a className={cls} href={href} target="_blank" rel="noreferrer" title={label} aria-label={label}>
-        {icon}
-      </a>
-    );
-  }
-  // No destination yet: a non-navigating affordance (title says "coming soon").
   return (
-    <span
-      className={`${cls} inert`}
-      role="link"
-      aria-disabled="true"
-      title={`${label} (not yet linked)`}
+    <a
+      className={cls}
+      href={href ?? jiraIssueHref(jiraKey)}
+      target="_blank"
+      rel="noreferrer"
+      title={label}
       aria-label={label}
       data-testid={`jira-link-${jiraKey}`}
     >
-      {icon}
-    </span>
+      <JiraIcon />
+    </a>
+  );
+}
+
+export function JiraKeyLink({ jiraKey, href = jiraIssueHref(jiraKey), className }: JiraLinkProps) {
+  const label = `Open ${jiraKey} in Jira`;
+  return (
+    <a
+      className={`jira-key-link${className ? ` ${className}` : ''}`}
+      href={href ?? jiraIssueHref(jiraKey)}
+      target="_blank"
+      rel="noreferrer"
+      title={label}
+      aria-label={label}
+      data-testid={`jira-key-link-${jiraKey}`}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <span className="jira-key-text">{jiraKey}</span>
+      <span className="jira-key-icon" aria-hidden="true">
+        <JiraIcon />
+      </span>
+    </a>
   );
 }

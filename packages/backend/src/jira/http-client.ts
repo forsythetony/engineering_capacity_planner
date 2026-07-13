@@ -111,17 +111,54 @@ export class HttpJiraClient implements JiraClient {
     });
   }
 
-  listBoards(projectKeyOrId?: string): Promise<JiraBoard[]> {
-    return this.request<{ values: JiraBoard[] }>('GET', '/rest/agile/1.0/board', undefined, {
-      projectKeyOrId,
-    }).then((r) => r.values ?? []);
+  async listBoards(projectKeyOrId?: string, name?: string): Promise<JiraBoard[]> {
+    const boards: JiraBoard[] = [];
+    const maxResults = 50;
+    let startAt = 0;
+
+    for (;;) {
+      const page = await this.request<{
+        values: JiraBoard[];
+        isLast?: boolean;
+        total?: number;
+        maxResults?: number;
+      }>('GET', '/rest/agile/1.0/board', undefined, {
+        projectKeyOrId,
+        name: name && name.trim() !== '' ? name.trim() : undefined,
+        startAt,
+        maxResults,
+      });
+      const values = page.values ?? [];
+      boards.push(...values);
+
+      if (page.isLast === true || values.length === 0) return boards;
+      startAt += page.maxResults ?? maxResults;
+      if (page.total !== undefined && startAt >= page.total) return boards;
+    }
   }
 
-  listSprints(boardId: number): Promise<JiraSprint[]> {
-    return this.request<{ values: JiraSprint[] }>(
-      'GET',
-      `/rest/agile/1.0/board/${boardId}/sprint`,
-    ).then((r) => r.values ?? []);
+  async listSprints(boardId: number): Promise<JiraSprint[]> {
+    const sprints: JiraSprint[] = [];
+    let startAt = 0;
+    const maxResults = 50;
+    for (;;) {
+      const page = await this.request<{
+        values: JiraSprint[];
+        isLast?: boolean;
+        total?: number;
+        maxResults?: number;
+      }>('GET', `/rest/agile/1.0/board/${boardId}/sprint`, undefined, {
+        state: 'active,future,closed',
+        startAt,
+        maxResults,
+      });
+      const values = page.values ?? [];
+      sprints.push(...values);
+
+      if (page.isLast === true || values.length === 0) return sprints;
+      startAt += page.maxResults ?? maxResults;
+      if (page.total !== undefined && startAt >= page.total) return sprints;
+    }
   }
 
   createIssue(input: JiraCreateIssueInput): Promise<JiraCreatedIssue> {

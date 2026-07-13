@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { DomainDataset } from '@ecp/shared';
 import { parseJiraTicketKey, SETTING_KEYS } from '@ecp/shared';
 import * as api from '../data/api';
+import { JiraKeyLink } from './JiraLink';
 
 /** Read a JSON-encoded global setting, or `fallback` when absent. */
 function settingValue<T>(dataset: DomainDataset, key: string, fallback: T): T {
@@ -11,6 +12,15 @@ function settingValue<T>(dataset: DomainDataset, key: string, fallback: T): T {
 
 function preview(value: unknown): string {
   if (value == null) return '—';
+  if (Array.isArray(value)) {
+    const named = value
+      .map((v) => (typeof v === 'object' && v !== null && 'name' in v ? String(v.name) : null))
+      .filter((v): v is string => v !== null && v.trim() !== '');
+    if (named.length > 0) return named.join(', ');
+  }
+  if (typeof value === 'object' && 'name' in value && typeof value.name === 'string') {
+    return value.name;
+  }
   const s = typeof value === 'string' ? value : JSON.stringify(value);
   return s.length > 48 ? `${s.slice(0, 45)}…` : s;
 }
@@ -34,6 +44,7 @@ interface TicketFieldModalProps {
  */
 export function TicketFieldModal({ dataset, disabled, run, initialRef, onClose }: TicketFieldModalProps) {
   const [refText, setRefText] = useState(initialRef ?? '');
+  const [fieldFilter, setFieldFilter] = useState('');
   const [ticket, setTicket] = useState<api.JiraTicketResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,7 +60,12 @@ export function TicketFieldModal({ dataset, disabled, run, initialRef, onClose }
     setLoading(true);
     setError(null);
     try {
-      setTicket(await api.getJiraTicket(refText.trim()));
+      const nextTicket = await api.getJiraTicket(refText.trim());
+      setTicket(nextTicket);
+      setFieldFilter('');
+      if (nextTicket.blocks.isNativeLink && nextTicket.blocks.linkType && blocksType !== nextTicket.blocks.linkType) {
+        await run(() => api.patchSettings({ [SETTING_KEYS.JIRA_BLOCKS_LINK_TYPE]: nextTicket.blocks.linkType }));
+      }
     } catch (e) {
       setTicket(null);
       setError(e instanceof Error ? e.message : String(e));
@@ -60,14 +76,41 @@ export function TicketFieldModal({ dataset, disabled, run, initialRef, onClose }
 
   // Story-point candidates: numeric custom fields on this ticket, then any other
   // custom field (so a field that happened to be blank here is still mappable).
-  const candidateFields = ticket
-    ? [
-        ...ticket.numericFields,
-        ...ticket.catalog.filter(
-          (c) => c.custom && !ticket.numericFields.some((n) => n.id === c.id),
-        ),
-      ]
-    : [];
+  const candidateFields = useMemo(
+    () =>
+      ticket
+        ? [
+            ...ticket.numericFields,
+            ...ticket.catalog.filter(
+              (c) => c.custom && !ticket.numericFields.some((n) => n.id === c.id),
+            ),
+          ]
+        : [],
+    [ticket],
+  );
+
+  const filteredFields = useMemo(() => {
+    if (!ticket) return [];
+    const q = fieldFilter.trim().toLowerCase();
+    if (q === '') return candidateFields;
+    return candidateFields.filter((c) => {
+      const value = preview(ticket.fields[c.id]).toLowerCase();
+      return c.name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q) || value.includes(q);
+    });
+  }, [candidateFields, fieldFilter, ticket]);
+
+  const selectedFields = useMemo(() => {
+    if (!ticket) return [];
+    return [
+      { role: 'Story points', fieldId: pointsField },
+      { role: 'Sprint', fieldId: sprintField },
+    ]
+      .filter((s) => s.fieldId !== '')
+      .map((s) => ({
+        ...s,
+        field: candidateFields.find((c) => c.id === s.fieldId) ?? ticket.catalog.find((c) => c.id === s.fieldId) ?? null,
+      }));
+  }, [candidateFields, pointsField, sprintField, ticket]);
 
   return (
     <div className="modal-overlay" data-testid="ticket-modal" onClick={onClose}>
@@ -111,7 +154,7 @@ export function TicketFieldModal({ dataset, disabled, run, initialRef, onClose }
         {ticket && (
           <div className="ticket-body" data-testid="ticket-body">
             <div className="ticket-card" data-testid="ticket-card">
-              <div className="ticket-card-key">{ticket.key}</div>
+              <div className="ticket-card-key"><JiraKeyLink jiraKey={ticket.key} /></div>
               <div className="ticket-card-summary">{ticket.summary ?? '(no summary)'}</div>
               <div className="ticket-card-meta">
                 {ticket.issueType && <span className="jira-field-badge">{ticket.issueType}</span>}
@@ -119,12 +162,63 @@ export function TicketFieldModal({ dataset, disabled, run, initialRef, onClose }
               </div>
             </div>
 
+            <section className="ticket-section selected-mappings" data-testid="ticket-selected-mappings">
+              <h4>Selected mappings</h4>
+              <div className="selected-mapping-list">
+                {selectedFields.map((s) => (
+                  <div className="selected-mapping-row" key={`${s.role}-${s.fieldId}`}>
+                    <span className="jira-field-badge">{s.role}</span>
+                    <span className="selected-mapping-main">
+                      <strong>{s.field?.name ?? s.fieldId}</strong>
+                      <code>{s.fieldId}</code>
+                    </span>
+                    <span className="jira-field-value">{preview(ticket.fields[s.fieldId])}</span>
+                  </div>
+                ))}
+                {blocksType && (
+                  <div className="selected-mapping-row">
+                    <span className="jira-field-badge">Blocking</span>
+                    <span className="selected-mapping-main">
+                      <strong>{blocksType}</strong>
+                      <code>issue link type</code>
+                    </span>
+                    <span className="jira-field-value">native Jira links</span>
+                  </div>
+                )}
+                {selectedFields.length === 0 && !blocksType && (
+                  <div className="hint">No fields selected yet.</div>
+                )}
+              </div>
+            </section>
+
             {/* --- Story points ------------------------------------------- */}
             <section className="ticket-section" data-testid="ticket-points">
               <h4>Story points</h4>
               <p className="hint">Which field on this ticket holds the estimate?</p>
+              <div className="ticket-field-filter">
+                <input
+                  type="search"
+                  value={fieldFilter}
+                  disabled={disabled}
+                  placeholder="Filter fields by name, id, or value…"
+                  aria-label="Filter ticket fields"
+                  data-testid="ticket-field-filter"
+                  onChange={(e) => setFieldFilter(e.target.value)}
+                />
+                {fieldFilter.trim() !== '' && (
+                  <button
+                    type="button"
+                    className="wizard-clear"
+                    aria-label="Clear field filter"
+                    disabled={disabled}
+                    onClick={() => setFieldFilter('')}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
               <div className="ticket-field-list">
-                {candidateFields.map((c) => {
+                {filteredFields.map((c) => {
                   const value = ticket.fields[c.id];
                   const mapped = pointsField === c.id;
                   return (
@@ -157,6 +251,9 @@ export function TicketFieldModal({ dataset, disabled, run, initialRef, onClose }
                 })}
                 {candidateFields.length === 0 && (
                   <div className="hint">This ticket exposes no custom fields to map.</div>
+                )}
+                {candidateFields.length > 0 && filteredFields.length === 0 && (
+                  <div className="hint">No fields match “{fieldFilter.trim()}”.</div>
                 )}
               </div>
             </section>

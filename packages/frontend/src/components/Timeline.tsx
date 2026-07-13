@@ -14,17 +14,19 @@ interface TimelineProps {
 // Timeline geometry (px). The axis sits `AXIS_BASE` from the top; each extra
 // label lane needed to keep close labels from overprinting pushes the axis (and
 // everything anchored to it) down by one `LANE_HEIGHT`.
-const AXIS_BASE = 70;
-const LANE_HEIGHT = 48;
-const LABEL_GAP = 6; // gap between a lane's label and the axis / the lane below
-const LINE_BELOW = 31; // how far a top marker's connector extends past the axis
+const AXIS_BASE = 104;
+const LANE_HEIGHT = 50;
+const LABEL_GAP = 28; // room between a lane's label chip and the axis / next lane
+const LINE_BELOW = 24; // how far a top marker's connector extends past the axis
+const BELOW_LABEL_TOP = 30;
+const BELOW_LANE_HEIGHT = 50;
 
 /**
  * Horizontal timeline: a "today" marker, markers for the epic's relevant days
  * (the gating one highlighted), the projected dev-complete marker colored by
  * verdict, and a buffer band between dev-complete and the gating day.
  *
- * Top labels are assigned vertical lanes so that relevant days falling close
+ * Top and bottom labels are assigned vertical lanes so that dates falling close
  * together on the axis stack instead of overprinting one another.
  */
 export function Timeline({ scope, result, today }: TimelineProps) {
@@ -38,8 +40,7 @@ export function Timeline({ scope, result, today }: TimelineProps) {
   const scale = makeScale(domain.start, domain.end);
   const pct = (d: IsoDate) => `${(scale.fractionOf(d) * 100).toFixed(3)}%`;
 
-  // Markers whose labels sit above the axis: "today" plus the epic's milestones.
-  const topMarkers = [
+  const allMarkers = [
     { key: 'today', className: 'today', date: today, label: 'Today' as string, testId: undefined as string | undefined },
     ...scope.milestones.map((m) => ({
       key: m.id,
@@ -49,13 +50,28 @@ export function Timeline({ scope, result, today }: TimelineProps) {
       testId: undefined as string | undefined,
     })),
   ];
+  const topMarkers = [
+    ...allMarkers.filter((m) => m.className === 'gating'),
+    ...(devComplete
+      ? [{
+          key: 'devcomplete',
+          className: `devcomplete ${result.verdict}`,
+          date: devComplete,
+          label: 'Dev-complete',
+          testId: 'marker-devcomplete',
+        }]
+      : []),
+  ];
+  const bottomMarkers = allMarkers.filter((m) => m.className !== 'gating');
   const lanes = assignLanes(topMarkers.map((m) => scale.fractionOf(m.date)));
   const laneCount = lanes.reduce((max, l) => Math.max(max, l), 0) + 1;
+  const bottomLanes = assignLanes(bottomMarkers.map((m) => scale.fractionOf(m.date)));
+  const bottomLaneCount = bottomLanes.reduce((max, l) => Math.max(max, l), 0) + 1;
   const axisTop = AXIS_BASE + (laneCount - 1) * LANE_HEIGHT;
 
   const rootStyle = {
     '--axis-top': `${axisTop}px`,
-    height: `${axisTop + 70}px`,
+    height: `${axisTop + BELOW_LABEL_TOP + bottomLaneCount * BELOW_LANE_HEIGHT + 26}px`,
   } as CSSProperties;
 
   return (
@@ -94,17 +110,19 @@ export function Timeline({ scope, result, today }: TimelineProps) {
         />
       ))}
 
-      {devComplete && (
+      {bottomMarkers.map((m, i) => (
         <Marker
-          className={`devcomplete ${result.verdict}`}
-          date={devComplete}
-          label="Dev-complete"
+          key={m.key}
+          className={m.className}
+          date={m.date}
+          label={m.label}
           pctOf={pct}
           axisTop={axisTop}
-          testId="marker-devcomplete"
+          lane={bottomLanes[i] ?? 0}
+          testId={m.testId}
           below
         />
-      )}
+      ))}
     </div>
   );
 }
@@ -115,7 +133,7 @@ export function Timeline({ scope, result, today }: TimelineProps) {
  * higher lane so their labels don't overlap. Inputs need not be sorted; lanes
  * are returned in the same order, lane 0 being nearest the axis.
  */
-const MIN_LANE_GAP = 0.12;
+const MIN_LANE_GAP = 0.16;
 function assignLanes(fractions: number[]): number[] {
   const order = fractions.map((f, i) => ({ f, i })).sort((a, b) => a.f - b.f);
   const laneLast: number[] = []; // rightmost fraction placed in each lane so far
@@ -149,7 +167,7 @@ function Marker({
   pctOf: (d: IsoDate) => string;
   /** Distance from the timeline top to the axis, in px. */
   axisTop: number;
-  /** Vertical lane above the axis (0 = nearest). Ignored for `below` markers. */
+  /** Vertical lane above/below the axis (0 = nearest). */
   lane?: number;
   testId?: string;
   /** Render the label below the axis (avoids colliding with top markers). */
@@ -158,7 +176,7 @@ function Marker({
   const labelEl = (
     <div
       className="marker-label"
-      style={below ? { top: axisTop + 26 } : { bottom: LABEL_GAP + lane * LANE_HEIGHT }}
+      style={below ? { top: axisTop + BELOW_LABEL_TOP + lane * BELOW_LANE_HEIGHT } : { bottom: LABEL_GAP + lane * LANE_HEIGHT }}
     >
       {label}
       <br />
@@ -166,7 +184,7 @@ function Marker({
     </div>
   );
   const lineStyle = below
-    ? { top: axisTop, height: 22 }
+    ? { top: axisTop, height: BELOW_LABEL_TOP + 2 + lane * BELOW_LANE_HEIGHT }
     : { top: axisTop - LABEL_GAP - lane * LANE_HEIGHT, height: LINE_BELOW + LABEL_GAP + lane * LANE_HEIGHT };
   const lineEl = <div className="marker-line" style={lineStyle} />;
   return (

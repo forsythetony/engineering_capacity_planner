@@ -3,7 +3,7 @@ import type { DomainDataset } from '@ecp/shared';
 import { Configuration } from './components/Configuration';
 import { DependencyGraph } from './components/DependencyGraph';
 import { GanttBoard } from './components/GanttBoard';
-import { JiraLink } from './components/JiraLink';
+import { JiraKeyLink } from './components/JiraLink';
 import { ProjectionCalendar } from './components/ProjectionCalendar';
 import { StatusStrip } from './components/StatusStrip';
 import { SyncButton } from './components/SyncButton';
@@ -64,7 +64,27 @@ function Planner({
   source: DatasetSource;
   onReload: () => Promise<void>;
 }) {
-  const epicKey = dataset.epics[0]!.key;
+  const firstEpic = dataset.epics[0] ?? null;
+  const firstTeam = firstEpic ? (dataset.teams.find((t) => t.id === firstEpic.teamId) ?? null) : null;
+
+  if (!firstEpic || !firstTeam) {
+    return <EmptyLivePlanner dataset={dataset} source={source} onReload={onReload} />;
+  }
+
+  return <LoadedPlanner dataset={dataset} source={source} onReload={onReload} epicKey={firstEpic.key} />;
+}
+
+function LoadedPlanner({
+  dataset,
+  source,
+  onReload,
+  epicKey,
+}: {
+  dataset: DomainDataset;
+  source: DatasetSource;
+  onReload: () => Promise<void>;
+  epicKey: string;
+}) {
   const scope = useMemo(() => scopeEpic(dataset, epicKey), [dataset, epicKey]);
 
   // The planning knobs (today / green-buffer / on-call) live on the
@@ -108,8 +128,7 @@ function Planner({
         <div>
           <h1>Engineering Capacity Planner</h1>
           <div className="epic-title">
-            {scope.epic.key} — {scope.epic.title}
-            <JiraLink jiraKey={scope.epic.key} />
+            <JiraKeyLink jiraKey={scope.epic.key} /> — {scope.epic.title}
             {' · '}
             {scope.team.name}
           </div>
@@ -213,6 +232,50 @@ function Planner({
           onReload={onReload}
         />
       )}
+    </div>
+  );
+}
+
+function EmptyLivePlanner({
+  dataset,
+  source,
+  onReload,
+}: {
+  dataset: DomainDataset;
+  source: DatasetSource;
+  onReload: () => Promise<void>;
+}) {
+  return (
+    <div className="app">
+      <header className="app-header">
+        <div>
+          <h1>Engineering Capacity Planner</h1>
+          <div className="epic-title">No capacity plan loaded yet</div>
+        </div>
+        <div className="header-actions">
+          <nav className="tabs">
+            <button type="button" className="tab active" data-testid="tab-configuration">
+              Configuration
+            </button>
+          </nav>
+          <SyncButton
+            dataset={dataset}
+            source={source}
+            onReload={onReload}
+            onGoToSetup={() => undefined}
+          />
+        </div>
+      </header>
+
+      <div className="source-note" data-testid="data-source" data-source={source}>
+        {source === 'api' ? '● Live data from backend API' : '○ Bundled sample data (backend not connected)'}
+      </div>
+
+      <div className="panel config-notice" data-testid="empty-live-notice">
+        The backend is connected. Finish the Jira setup below, then sync to import the first capacity plan.
+      </div>
+
+      <Configuration dataset={dataset} teamId={null} epicKey={null} editable={source === 'api'} onReload={onReload} />
     </div>
   );
 }

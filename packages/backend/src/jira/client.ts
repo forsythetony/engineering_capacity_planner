@@ -51,8 +51,11 @@ export interface JiraClient {
   }): Promise<JiraSearchResult>;
   /** `GET /rest/api/3/issue/{idOrKey}` — one issue, e.g. the mapping sample. */
   getIssue(idOrKey: string, fields?: string[]): Promise<JiraIssue>;
-  /** `GET /rest/agile/1.0/board?projectKeyOrId=…` — boards for a project. */
-  listBoards(projectKeyOrId?: string): Promise<JiraBoard[]>;
+  /**
+   * `GET /rest/agile/1.0/board?projectKeyOrId=…&name=…` — Agile boards,
+   * optionally narrowed by project and board-name search.
+   */
+  listBoards(projectKeyOrId?: string, name?: string): Promise<JiraBoard[]>;
   /** `GET /rest/agile/1.0/board/{boardId}/sprint` — a board's sprints. */
   listSprints(boardId: number): Promise<JiraSprint[]>;
 

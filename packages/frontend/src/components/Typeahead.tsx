@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { parseJiraTicketKey } from '@ecp/shared';
+import { JiraKeyLink } from './JiraLink';
 
 export interface TypeaheadOption {
   /** Stable identity used as the React key and selection value. */
@@ -116,24 +118,42 @@ export function Typeahead<T extends TypeaheadOption>({
             <div className="typeahead-status">No matches</div>
           )}
           {options.map((opt) => (
-            <button
+            <div
               key={opt.id}
-              type="button"
               className="typeahead-option"
               role="option"
+              tabIndex={0}
               aria-selected={false}
               data-testid="typeahead-option"
               onClick={() => choose(opt)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  choose(opt);
+                }
+              }}
             >
               <span className="typeahead-main">
                 {opt.imageUrl && <img className="typeahead-avatar" src={opt.imageUrl} alt="" width={20} height={20} />}
                 <span className="typeahead-label">{opt.label}</span>
               </span>
-              {opt.hint && <span className="typeahead-hint">{opt.hint}</span>}
-            </button>
+              {opt.hint && <TypeaheadHint hint={opt.hint} />}
+            </div>
           ))}
         </div>
       )}
     </div>
   );
+}
+
+function TypeaheadHint({ hint }: { hint: string }) {
+  const key = parseJiraTicketKey(hint);
+  if (key === hint) {
+    return (
+      <span className="typeahead-hint">
+        <JiraKeyLink jiraKey={hint} />
+      </span>
+    );
+  }
+  return <span className="typeahead-hint">{hint}</span>;
 }

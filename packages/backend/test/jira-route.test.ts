@@ -158,6 +158,22 @@ describe('Jira setup wizard endpoints', () => {
     expect(none.json().boards).toEqual([]);
   });
 
+  it('GET /api/jira/boards searches board names through the Jira client', async () => {
+    app = await jiraServer(
+      new FakeJiraClient({
+        boards: [
+          { id: 1, name: 'Checkout board', type: 'scrum', location: { projectKey: 'CKT' } },
+          { id: 4623, name: 'VSRB board', type: 'scrum', location: { projectKey: 'VSRB' } },
+        ],
+      }),
+    );
+    const res = await app.inject({ method: 'GET', url: '/api/jira/boards?q=VSRB' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().boards).toEqual([
+      { id: 4623, name: 'VSRB board', type: 'scrum', projectKey: 'VSRB' },
+    ]);
+  });
+
   it('GET /api/jira/epics returns epics under the project, filtered by text', async () => {
     app = await jiraServer(await seedFakeBoard());
     const res = await app.inject({ method: 'GET', url: '/api/jira/epics?project=CKT' });
