@@ -869,6 +869,19 @@ button.tab:hover:not(.active) {
   background: color-mix(in srgb, var(--accent) 24%, var(--panel));
   border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
 }
+/* Load bands: at-a-glance red/yellow/green shading of how full a sprint is. */
+.cal-bar.sprint.load-green {
+  background: color-mix(in srgb, var(--green) 30%, var(--panel));
+  border-color: var(--green-dim);
+}
+.cal-bar.sprint.load-yellow {
+  background: color-mix(in srgb, var(--yellow) 32%, var(--panel));
+  border-color: var(--yellow-dim);
+}
+.cal-bar.sprint.load-red {
+  background: color-mix(in srgb, var(--red) 36%, var(--panel));
+  border-color: var(--red-dim);
+}
 .cal-bar.sprint .cal-bar-text {
   color: var(--text);
 }
@@ -999,6 +1012,18 @@ button.tab:hover:not(.active) {
 .cal-bar-swatch.sprint {
   background: color-mix(in srgb, var(--accent) 40%, var(--panel));
   border-color: color-mix(in srgb, var(--accent) 70%, var(--border));
+}
+.cal-bar-swatch.sprint.load-green {
+  background: color-mix(in srgb, var(--green) 30%, var(--panel));
+  border-color: var(--green-dim);
+}
+.cal-bar-swatch.sprint.load-yellow {
+  background: color-mix(in srgb, var(--yellow) 32%, var(--panel));
+  border-color: var(--yellow-dim);
+}
+.cal-bar-swatch.sprint.load-red {
+  background: color-mix(in srgb, var(--red) 36%, var(--panel));
+  border-color: var(--red-dim);
 }
 .cal-bar-swatch.week {
   background: color-mix(in srgb, var(--accent) 12%, var(--panel-2));
@@ -1535,12 +1560,41 @@ button.tab:hover:not(.active) {
   gap: 0.5rem;
   font-weight: 600;
 }
+.gantt-sprint-label {
+  white-space: nowrap;
+}
+.gantt-sprint-picker {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
 .gantt-sprint select {
   background: var(--panel-2);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 0.35rem 0.5rem;
+}
+.gantt-sprint-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  font-size: 1.1rem;
+  line-height: 1;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.gantt-sprint-arrow:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.gantt-sprint-arrow:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 .gantt-legend {
   display: flex;

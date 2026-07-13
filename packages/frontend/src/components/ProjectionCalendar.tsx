@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { IsoDate } from '@ecp/shared';
 import { addDays, diffDays, formatIso, getWeekday, isWorkingDay, parseIso } from '@ecp/shared';
-import type { ProjectionResult, Verdict } from '@ecp/engine';
-import { sprintWeeks } from '@ecp/engine';
+import type { ProjectionResult, Verdict, WeekVerdict } from '@ecp/engine';
+import { sprintWeeks, weekVerdict } from '@ecp/engine';
 import type { EpicScope } from '../lib/projection';
 import type { AvailabilityEntry } from '../lib/availability';
 import { KIND_LABEL } from '../lib/availability';
@@ -119,6 +119,31 @@ export function ProjectionCalendar({ scope, result, today, availability }: Proje
     }
     return out;
   }, [result.sprints, workingDays]);
+
+  // How loaded each sprint is, keyed by its start date so the calendar's
+  // engine-derived sprint windows can be matched back to the stored sprints the
+  // Gantt planner places work into (they tile off the same cadence, so their
+  // start dates coincide). Load = placed, not-done points vs the sprint's
+  // capacity, banded green/yellow/red exactly like the Gantt week columns.
+  const sprintLoadByStart = useMemo(() => {
+    const byItemKey = new Map(scope.workItems.map((w) => [w.key, w]));
+    const placedBySprintId = new Map<string, number>();
+    for (const p of scope.placements) {
+      const item = byItemKey.get(p.workItemKey);
+      if (!item || item.status === 'Done') continue;
+      placedBySprintId.set(p.sprintId, (placedBySprintId.get(p.sprintId) ?? 0) + item.points);
+    }
+    const byStart = new Map<IsoDate, number>();
+    for (const s of scope.sprints) byStart.set(s.startDate, placedBySprintId.get(s.id) ?? 0);
+    return byStart;
+  }, [scope.workItems, scope.placements, scope.sprints]);
+
+  /** Placed load + verdict for a calendar sprint window, or `null` if no stored sprint aligns. */
+  const loadFor = (start: IsoDate, capacity: number): { placed: number; verdict: WeekVerdict } | null => {
+    if (!sprintLoadByStart.has(start)) return null;
+    const placed = sprintLoadByStart.get(start)!;
+    return { placed, verdict: weekVerdict(placed, capacity, scope.defaults.weekYellowLoadFraction) };
+  };
 
   const months = useMemo(() => monthsBetween(domain.start, domain.end), [domain]);
   const todayMonthIdx = months.findIndex((m) => sameMonth(m, today));
@@ -290,16 +315,29 @@ export function ProjectionCalendar({ scope, result, today, availability }: Proje
             <div className="cal-week" key={weekStart} style={weekStyle}>
               {barsHeight > 0 && (
                 <div className="cal-week-overlay" aria-hidden="true">
-                  {sprintBars.map(({ s, span }) => (
-                    <div
-                      key={`sprint-${s.index}`}
-                      className={`cal-bar sprint ${s.index % 2 === 0 ? 'even' : 'odd'}${spanEdges(span)}`}
-                      style={{ ...spanStyle(span), top: sprintTop, height: SPRINT_H }}
-                      title={`Sprint ${s.index} · ${s.capacity} pts capacity`}
-                    >
-                      {span.isStart && <span className="cal-bar-text">Sprint {s.index} · {s.capacity} pts</span>}
-                    </div>
-                  ))}
+                  {sprintBars.map(({ s, span }) => {
+                    const load = loadFor(s.start, s.capacity);
+                    const tone = load ? `load-${load.verdict}` : s.index % 2 === 0 ? 'even' : 'odd';
+                    return (
+                      <div
+                        key={`sprint-${s.index}`}
+                        className={`cal-bar sprint ${tone}${spanEdges(span)}`}
+                        style={{ ...spanStyle(span), top: sprintTop, height: SPRINT_H }}
+                        title={
+                          load
+                            ? `Sprint ${s.index} · ${load.placed} / ${s.capacity} pts placed (${load.verdict})`
+                            : `Sprint ${s.index} · ${s.capacity} pts capacity`
+                        }
+                        data-load={load?.verdict}
+                      >
+                        {span.isStart && (
+                          <span className="cal-bar-text">
+                            Sprint {s.index} · {load ? `${load.placed}/${s.capacity}` : s.capacity} pts
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
                   {weekBars.map(({ w, span }) => (
                     <div
                       key={`week-${w.sprintIndex}-${w.weekIndex}`}
@@ -377,7 +415,10 @@ export function ProjectionCalendar({ scope, result, today, availability }: Proje
 
       <div className="cal-legend">
         <span className="legend-item"><span className="cal-dot today" /> Today</span>
-        <span className="legend-item"><span className="cal-bar-swatch sprint" /> Sprint</span>
+        <span className="legend-item">Sprint load:</span>
+        <span className="legend-item"><span className="cal-bar-swatch sprint load-green" /> has slack</span>
+        <span className="legend-item"><span className="cal-bar-swatch sprint load-yellow" /> full</span>
+        <span className="legend-item"><span className="cal-bar-swatch sprint load-red" /> over capacity</span>
         <span className="legend-item"><span className="cal-bar-swatch week" /> Sprint week</span>
         <span className="legend-item"><span className="cal-bar-swatch pto" /> PTO</span>
         <span className="legend-item"><span className="cal-bar-swatch oncall" /> On-call</span>

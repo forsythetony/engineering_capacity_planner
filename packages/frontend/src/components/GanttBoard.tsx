@@ -90,6 +90,13 @@ export function GanttBoard({ scope, source }: { scope: EpicScope; source: Datase
   const gridStyle = { gridTemplateColumns: `220px repeat(${weeks.length}, minmax(150px, 1fr))` };
   const openMember = view.members.find((m) => m.member.id === openMemberId) ?? null;
 
+  // Step one sprint at a time through the (start-ordered) sprint list.
+  const sprintIdx = scope.sprints.findIndex((s) => s.id === sprint?.id);
+  const stepSprint = (delta: number): void => {
+    const next = scope.sprints[sprintIdx + delta];
+    if (next) setSprintId(next.id);
+  };
+
   const dropHandlers = (weekIndex: number) => ({
     onDragOver: (e: React.DragEvent) => {
       e.preventDefault();
@@ -112,20 +119,47 @@ export function GanttBoard({ scope, source }: { scope: EpicScope; source: Datase
   return (
     <div className="panel gantt" data-testid="gantt-board">
       <div className="gantt-toolbar">
-        <label className="gantt-sprint">
-          Sprint
-          <select
-            data-testid="gantt-sprint-select"
-            value={sprint?.id ?? ''}
-            onChange={(e) => setSprintId(e.target.value)}
-          >
-            {scope.sprints.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name} · {formatDayShort(s.startDate)}–{formatDayShort(s.endDate)}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="gantt-sprint">
+          <label className="gantt-sprint-label" htmlFor="gantt-sprint-select">
+            Sprint
+          </label>
+          <div className="gantt-sprint-picker">
+            <button
+              type="button"
+              className="gantt-sprint-arrow"
+              data-testid="gantt-sprint-prev"
+              onClick={() => stepSprint(-1)}
+              disabled={sprintIdx <= 0}
+              aria-label="Previous sprint"
+              title="Previous sprint"
+            >
+              ‹
+            </button>
+            <select
+              id="gantt-sprint-select"
+              data-testid="gantt-sprint-select"
+              value={sprint?.id ?? ''}
+              onChange={(e) => setSprintId(e.target.value)}
+            >
+              {scope.sprints.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name} · {formatDayShort(s.startDate)}–{formatDayShort(s.endDate)}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="gantt-sprint-arrow"
+              data-testid="gantt-sprint-next"
+              onClick={() => stepSprint(1)}
+              disabled={sprintIdx < 0 || sprintIdx >= scope.sprints.length - 1}
+              aria-label="Next sprint"
+              title="Next sprint"
+            >
+              ›
+            </button>
+          </div>
+        </div>
         <div className="gantt-legend">
           <span className="chip-legend green">green — has slack</span>
           <span className="chip-legend yellow">yellow — full</span>
