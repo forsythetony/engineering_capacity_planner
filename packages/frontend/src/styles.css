@@ -2092,3 +2092,66 @@ button.tab:hover:not(.active) {
 .sync-change-tag.tone-blue  { background: color-mix(in srgb, var(--accent) 22%, var(--panel)); color: var(--accent); }
 .sync-change-entity { flex: none; font-size: 12px; color: var(--text); }
 .sync-change-detail { color: var(--muted); }
+
+/* --- Database tools: snapshot + drag-and-drop import --- */
+.db-tools-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.db-tools-row .hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+.db-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 22px 16px;
+  border: 2px dashed var(--border);
+  border-radius: 10px;
+  background: var(--panel-2);
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.12s, background 0.12s;
+}
+.db-dropzone:hover:not(.disabled),
+.db-dropzone:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+.db-dropzone.dragging {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.db-dropzone.disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.db-dropzone-icon {
+  font-size: 22px;
+  color: var(--accent);
+  line-height: 1;
+}
+.db-dropzone-text {
+  font-size: 13px;
+  color: var(--text);
+}
+.db-dropzone-note {
+  font-size: 11px;
+  color: var(--muted);
+}
+.db-file-input {
+  display: none;
+}
+.db-tools-status {
+  margin-top: 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  background: color-mix(in srgb, var(--green) 14%, var(--panel));
+  color: var(--green);
+}

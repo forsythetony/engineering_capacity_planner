@@ -7,6 +7,7 @@ import { HttpError } from './http-error.js';
 import type { JiraClient } from './jira/client.js';
 import { createDemoJiraClient, DEMO_MAPPING } from './jira/demo.js';
 import { registerConfigRoutes } from './routes/config.js';
+import { registerDbRoutes } from './routes/db.js';
 import { registerJiraRoutes } from './routes/jira.js';
 import { registerPlanningRoutes } from './routes/planning.js';
 import { registerSyncRoutes } from './routes/sync.js';
@@ -101,6 +102,8 @@ export async function buildServer(overrides: Partial<AppConfig> = {}, deps: Buil
   registerSyncRoutes(app, db, config, jiraClient);
   // Jira introspection for the live field mapper (project plan §7).
   registerJiraRoutes(app, db, config, jiraClient);
+  // Local DB snapshot + drag-and-drop import.
+  registerDbRoutes(app, db, config);
 
   app.addHook('onClose', async () => {
     db.close();

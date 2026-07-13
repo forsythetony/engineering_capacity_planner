@@ -143,6 +143,23 @@ Seeded synthetic dataset → ./data/ecp.db (seed=1)
     ...
 ```
 
+## Snapshots & Database Import
+
+The SQLite file is the shareable unit, so the **Configuration → Database** panel
+lets you back it up and restore it without touching the shell:
+
+- **Take snapshot** copies the live database to a timestamped
+  `ecp-snapshot-<ISO-timestamp>.db` beside it (the WAL is checkpointed first so
+  the copy is current). Snapshots are gitignored like every other `*.db`.
+- **Import** — drag a `.db` file onto the drop zone (or click to browse) to
+  replace the current data with it. The upload is validated as an ECP SQLite
+  database before anything is overwritten, and the existing data is snapshotted
+  first, so a mistaken restore is always recoverable from the backup it leaves
+  behind.
+
+Both are also available on the API: `POST /api/db/snapshot`, and
+`POST /api/db/import` with the file bytes as `application/octet-stream`.
+
 ## Jira Synchronization (Phase 7)
 
 The app can pull its data from a real Jira project instead of the synthetic

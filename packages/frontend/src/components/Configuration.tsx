@@ -11,6 +11,7 @@ import { AddAvailabilityModal, type NewAvailability } from './AddAvailabilityMod
 import { MemberAvatar } from './MemberAvatar';
 import { JiraSetupWizard } from './JiraSetupWizard';
 import { SyncLog } from './SyncLog';
+import { DatabaseTools } from './DatabaseTools';
 
 interface ConfigurationProps {
   dataset: DomainDataset;
@@ -103,6 +104,7 @@ export function Configuration({ dataset, teamId, epicKey, editable, onReload }: 
         editable={editable}
         refreshKey={globalStringSetting(dataset.settings, SETTING_KEYS.LAST_SYNCED_AT)}
       />
+      <DatabaseTools editable={editable} onReload={onReload} />
     </div>
   );
 }

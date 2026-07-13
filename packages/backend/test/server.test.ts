@@ -1,3 +1,6 @@
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { buildServer } from '../src/server.js';
@@ -110,5 +113,64 @@ describe('Configuration write API', () => {
     const gate = dataset.milestones.find((m: any) => m.isGating);
     const res = await app.inject({ method: 'DELETE', url: `/api/milestones/${gate.id}` });
     expect(res.statusCode).toBe(409);
+  });
+});
+
+describe('Database snapshot + import API', () => {
+  let dir: string | undefined;
+
+  afterEach(() => {
+    if (dir) rmSync(dir, { recursive: true, force: true });
+    dir = undefined;
+  });
+
+  it('snapshots the live DB file to a timestamped copy', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'ecp-srv-'));
+    app = await buildServer({ dbPath: join(dir, 'ecp.db') });
+
+    const res = await app.inject({ method: 'POST', url: '/api/db/snapshot' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().file).toMatch(/ecp-snapshot-.*\.db$/);
+    expect(readdirSync(dir).some((f) => f.includes('snapshot'))).toBe(true);
+  });
+
+  it('rejects snapshotting an in-memory database with a 400', async () => {
+    app = await buildServer({ dbPath: ':memory:' });
+    const res = await app.inject({ method: 'POST', url: '/api/db/snapshot' });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('imports an uploaded database and replaces the dataset', async () => {
+    // Produce a real ECP database on disk via a throwaway server, then upload it.
+    dir = mkdtempSync(join(tmpdir(), 'ecp-srv-'));
+    const srcPath = join(dir, 'source.db');
+    const src = await buildServer({ dbPath: srcPath, syntheticSeed: 42 });
+    await src.inject({ method: 'GET', url: '/api/dataset' }); // force seed
+    await src.close();
+    const bytes = readFileSync(srcPath);
+
+    app = await buildServer({ dbPath: ':memory:', seedIfEmpty: false });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/db/import',
+      headers: { 'content-type': 'application/octet-stream' },
+      payload: bytes,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().summary.workItems).toBe(50);
+
+    const dataset = (await app.inject({ method: 'GET', url: '/api/dataset' })).json();
+    expect(dataset.workItems).toHaveLength(50);
+  });
+
+  it('rejects a non-SQLite upload with a 400', async () => {
+    app = await buildServer({ dbPath: ':memory:', seedIfEmpty: false });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/db/import',
+      headers: { 'content-type': 'application/octet-stream' },
+      payload: Buffer.from('definitely not sqlite'),
+    });
+    expect(res.statusCode).toBe(400);
   });
 });

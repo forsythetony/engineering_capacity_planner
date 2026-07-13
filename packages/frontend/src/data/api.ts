@@ -40,6 +40,45 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 export const patchSettings = (patch: Record<string, unknown>): Promise<unknown> =>
   request('PATCH', '/api/settings', patch);
 
+// --- Local DB snapshot + import --------------------------------------------
+export interface SnapshotResponse {
+  /** Filename of the snapshot written next to the live database. */
+  file: string;
+}
+
+export interface ImportResponse {
+  summary: {
+    teams: number;
+    members: number;
+    epics: number;
+    stories: number;
+    workItems: number;
+    dependencies: number;
+    sprints: number;
+    placements: number;
+  };
+  /** Auto-snapshot of the pre-import data, or null for an in-memory DB. */
+  backup: string | null;
+}
+
+/** Copy the live database to a timestamped `*-snapshot-*.db` on the server. */
+export const snapshotDb = (): Promise<SnapshotResponse> => request('POST', '/api/db/snapshot');
+
+/** Upload a `.db` file to replace the live database's contents. */
+export async function importDb(file: File): Promise<ImportResponse> {
+  const res = await fetch(`${API_BASE}/api/db/import`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/octet-stream' },
+    body: file,
+  });
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : undefined;
+  if (!res.ok) {
+    throw new Error(data?.error ?? `import failed (${res.status})`);
+  }
+  return data as ImportResponse;
+}
+
 // --- Jira sync + live field mapping (project plan §7) ----------------------
 export interface JiraSampleResponse {
   projectKey: string;
