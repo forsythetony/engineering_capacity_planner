@@ -20,6 +20,29 @@ test.describe('Gantt Planner tab', () => {
     await expect(page.locator('[data-testid^="gantt-bag-item-"]').first()).toBeVisible();
   });
 
+  test('arrow buttons step the sprint selector forward and back', async ({ page }) => {
+    await page.goto('/');
+    await page.getByTestId('tab-gantt').click();
+
+    const select = page.getByTestId('gantt-sprint-select');
+    const prev = page.getByTestId('gantt-sprint-prev');
+    const next = page.getByTestId('gantt-sprint-next');
+
+    // Opens on the first sprint, so "previous" is disabled and "next" is live.
+    const first = await select.inputValue();
+    await expect(prev).toBeDisabled();
+    await expect(next).toBeEnabled();
+
+    // Next advances one sprint; previous returns to the first.
+    await next.click();
+    const second = await select.inputValue();
+    expect(second).not.toBe(first);
+    await expect(prev).toBeEnabled();
+    await prev.click();
+    await expect(select).toHaveValue(first);
+    await expect(prev).toBeDisabled();
+  });
+
   test('cards carry the title and reveal full details on hover', async ({ page }) => {
     await page.goto('/');
     await page.getByTestId('tab-gantt').click();

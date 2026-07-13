@@ -37,6 +37,11 @@ test.describe('Calendar / timeline tab', () => {
     await expect(calendar.locator('.cal-bar.week').first()).toBeVisible();
     await expect(calendar.locator('.cal-bar.avail').first()).toBeVisible();
 
+    // Sprint bars are shaded red/yellow/green by how loaded they are; the seeded
+    // first sprint is over-committed, so it renders red.
+    await expect(calendar.locator('.cal-bar.sprint[data-load]').first()).toBeVisible();
+    await expect(calendar.locator('.cal-bar.sprint.load-red').first()).toBeVisible();
+
     // Paging forward reaches September, where the gating day and dev-complete land.
     await page.getByTestId('cal-next').click();
     await expect(page.getByTestId('cal-current-month')).toHaveText('Aug 2026');
