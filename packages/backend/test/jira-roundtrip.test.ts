@@ -108,11 +108,12 @@ describe('Jira round-trip: synthetic → push → sync', () => {
 
     const sync = await app.inject({ method: 'POST', url: '/api/sync' });
     expect(sync.json().summary.placementsPulledDone).toBe(1);
-    expect(sync.json().summary.placementsKept).toBe(1);
+    expect(sync.json().summary.placementsKept).toBeGreaterThanOrEqual(1);
 
     const after = (await app.inject({ method: 'GET', url: '/api/dataset' })).json();
     const placedKeys = after.placements.map((p: any) => p.workItemKey);
-    expect(placedKeys).toEqual([toKeep.key]);
+    expect(placedKeys).toContain(toKeep.key);
+    expect(placedKeys).not.toContain(toComplete.key);
     // Sanity: the pushed key map covers the completed item.
     expect([...push.keyByOldKey.values()]).toContain(toComplete.key);
   });

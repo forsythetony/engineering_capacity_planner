@@ -43,6 +43,7 @@ function migrate(db: Db): void {
   // Gantt Planner (project plan §6a): labels on work items. The `sprint` and
   // `planned_placement` tables are created by `CREATE TABLE IF NOT EXISTS`.
   ensureColumn(db, 'work_item', 'labels', "TEXT NOT NULL DEFAULT '[]'");
+  ensureColumn(db, 'user_story', 'labels', "TEXT NOT NULL DEFAULT '[]'");
   // Jira setup wizard (project plan §7): link a member to a Jira account, and
   // remember their Jira avatar image.
   ensureColumn(db, 'team_member', 'jira_account_id', 'TEXT');

@@ -74,7 +74,10 @@ CREATE TABLE IF NOT EXISTS epic_milestone (
 CREATE TABLE IF NOT EXISTS user_story (
   key      TEXT PRIMARY KEY,
   epic_key TEXT NOT NULL REFERENCES epic(key) ON DELETE CASCADE,
-  title    TEXT NOT NULL
+  title    TEXT NOT NULL,
+  -- JSON array of parent labels, e.g. '["Cart"]'. Gantt lanes may inherit
+  -- these onto child work items when enabled for an epic.
+  labels   TEXT NOT NULL DEFAULT '[]'
 );
 
 CREATE TABLE IF NOT EXISTS work_item (

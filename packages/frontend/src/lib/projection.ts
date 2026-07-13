@@ -44,6 +44,8 @@ export interface EpicScope {
   placements: PlannedPlacement[];
   /** Engine knob defaults read from the dataset's settings. */
   defaults: { greenMinBufferDays: number; oncallMultiplier: number; weekYellowLoadFraction: number };
+  /** Epic-scoped label controls for Gantt lanes. */
+  labelConfig: { applyParentLabels: boolean; ignoreLabels: string[] };
   /**
    * The "today" to open the projection on, from the `planning_today` setting;
    * `null` for real data, where the UI uses the actual current date.
@@ -114,6 +116,10 @@ export function scopeEpic(dataset: DomainDataset, epicKey: string): EpicScope {
       oncallMultiplier: cfg.oncallMultiplier ?? 0.5,
       weekYellowLoadFraction: cfg.weekYellowLoadFraction ?? 1,
     },
+    labelConfig: {
+      applyParentLabels: readEpicSetting(dataset, epicKey, SETTING_KEYS.GANTT_APPLY_PARENT_LABELS, false),
+      ignoreLabels: readEpicSetting(dataset, epicKey, SETTING_KEYS.GANTT_IGNORE_LABELS, []),
+    },
     planningToday: readGlobalString(dataset, SETTING_KEYS.PLANNING_TODAY),
   };
 }
@@ -124,6 +130,17 @@ function readGlobalString(dataset: DomainDataset, key: string): string | null {
   if (!row) return null;
   const parsed = JSON.parse(row.value);
   return typeof parsed === 'string' ? parsed : null;
+}
+
+/** Read an epic-scoped setting (JSON-encoded), or a fallback if absent/invalid. */
+function readEpicSetting<T>(dataset: DomainDataset, epicKey: string, key: string, fallback: T): T {
+  const row = dataset.settings.find((s) => s.scope === 'epic' && s.scopeId === epicKey && s.key === key);
+  if (!row) return fallback;
+  try {
+    return JSON.parse(row.value) as T;
+  } catch {
+    return fallback;
+  }
 }
 
 /** Apply a scenario's cuts / mark-done to the epic's work items. */

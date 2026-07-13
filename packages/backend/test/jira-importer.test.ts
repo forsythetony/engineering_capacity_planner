@@ -21,7 +21,13 @@ async function seedFake(): Promise<FakeJiraClient> {
     fields: { project: { key: 'CKT' }, issuetype: { name: 'Epic' }, summary: 'Checkout Revamp' },
   });
   const story = await jira.createIssue({
-    fields: { project: { key: 'CKT' }, issuetype: { name: 'Story' }, summary: 'Cart service', parent: { key: epic.key } },
+    fields: {
+      project: { key: 'CKT' },
+      issuetype: { name: 'Story' },
+      summary: 'Cart service',
+      parent: { key: epic.key },
+      labels: ['Parent Lane'],
+    },
   });
   const a = await jira.createIssue({
     fields: {
@@ -52,6 +58,7 @@ describe('JiraImporter over the fake client', () => {
 
     expect(ds.epics.map((e) => e.key)).toEqual(['CKT-1']);
     expect(ds.stories.map((s) => s.key)).toEqual(['CKT-2']);
+    expect(ds.stories[0]?.labels).toEqual(['Parent Lane']);
     expect(ds.workItems.map((w) => w.key).sort()).toEqual(['CKT-3', 'CKT-4']);
     expect(ds.workItems.find((w) => w.key === 'CKT-3')).toMatchObject({ points: 5, status: 'In Progress', labels: ['Cart'] });
     expect(ds.dependencies).toEqual([

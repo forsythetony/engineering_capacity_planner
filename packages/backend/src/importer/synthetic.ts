@@ -253,6 +253,7 @@ export function generateSyntheticDataset(config: SyntheticConfig = {}): DomainDa
       key: `${EPIC_KEY}-S${i + 1}`,
       epicKey: EPIC_KEY,
       title: STORY_TITLES[i % STORY_TITLES.length]!,
+      labels: [LABELS[i % LABELS.length]!],
     });
   }
 

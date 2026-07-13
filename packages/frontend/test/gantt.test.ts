@@ -51,6 +51,36 @@ describe('buildGanttView', () => {
     }
   });
 
+  it('can inherit parent story labels for lane assignment', () => {
+    const item = { ...scope.workItems[0]!, labels: [] };
+    const parentScope = {
+      ...scope,
+      stories: scope.stories.map((s) => (s.key === item.storyKey ? { ...s, labels: ['Parent Lane'] } : s)),
+      workItems: [item],
+      placements: [{ id: 'p1', workItemKey: item.key, sprintId: scope.sprints[0]!.id, weekIndex: 0 }],
+      labelConfig: { applyParentLabels: true, ignoreLabels: [] },
+    };
+
+    const view = buildGanttView(parentScope, scope.sprints[0]!.id);
+
+    expect(view.lanes).toEqual([{ label: 'Parent Lane', totalPoints: item.points }]);
+    expect(ganttCell(view, 'Parent Lane', 0)?.items).toEqual([item]);
+  });
+
+  it('ignores configured labels before choosing a lane', () => {
+    const item = { ...scope.workItems[0]!, labels: ['Noise', 'Useful'] };
+    const ignoredScope = {
+      ...scope,
+      workItems: [item],
+      placements: [],
+      labelConfig: { applyParentLabels: false, ignoreLabels: ['Noise'] },
+    };
+
+    const view = buildGanttView(ignoredScope, scope.sprints[0]!.id);
+
+    expect(view.lanes).toEqual([{ label: 'Useful', totalPoints: item.points }]);
+  });
+
   it("a week's placed load equals the sum of its cells' remaining points", () => {
     const view = buildGanttView(scope, scope.sprints[0]!.id);
     view.weeks.forEach((week) => {

@@ -182,10 +182,30 @@ const EDITABLE_SETTINGS: Record<string, (value: unknown, key: string) => unknown
   [SETTING_KEYS.JIRA_LABELS_FIELD]: nullableString,
 };
 
+/** Epic-scoped settings the Configuration UI may edit. */
+const EDITABLE_EPIC_SETTINGS: Record<string, (value: unknown, key: string) => unknown> = {
+  [SETTING_KEYS.GANTT_APPLY_PARENT_LABELS]: booleanSetting,
+  [SETTING_KEYS.GANTT_IGNORE_LABELS]: stringListSetting,
+};
+
 function nullableString(value: unknown, field: string): string | null {
   if (value === null) return null;
   if (typeof value !== 'string') throw badRequest(`${field} must be a string or null`);
   return value;
+}
+
+function booleanSetting(value: unknown, field: string): boolean {
+  if (typeof value !== 'boolean') throw badRequest(`${field} must be a boolean`);
+  return value;
+}
+
+function stringListSetting(value: unknown, field: string): string[] {
+  if (!Array.isArray(value)) throw badRequest(`${field} must be an array of strings`);
+  const labels = value.map((v) => {
+    if (typeof v !== 'string') throw badRequest(`${field} must be an array of strings`);
+    return v.trim();
+  });
+  return [...new Set(labels.filter((v) => v !== ''))];
 }
 
 /**
@@ -215,6 +235,43 @@ export function upsertGlobalSettings(db: Db, patch: Record<string, unknown>): Se
   return db
     .prepare("SELECT * FROM settings WHERE scope = 'global'")
     .all()
+    .map(
+      (r: any): Setting => ({
+        key: r.key,
+        scope: r.scope,
+        scopeId: r.scope_id === '' ? null : r.scope_id,
+        value: r.value,
+      }),
+    );
+}
+
+/**
+ * Upsert one or more epic-scoped settings for the given epic. Unknown keys are
+ * rejected, and the returned rows are all settings scoped to that epic.
+ */
+export function upsertEpicSettings(db: Db, epicKey: string, patch: Record<string, unknown>): Setting[] {
+  requireEpic(db, epicKey);
+  const entries = Object.entries(patch);
+  if (entries.length === 0) throw badRequest('No settings provided');
+
+  const validated = entries.map(([key, value]) => {
+    const validate = EDITABLE_EPIC_SETTINGS[key];
+    if (!validate) throw badRequest(`Unknown or read-only epic setting "${key}"`);
+    return { key, scopeId: epicKey, value: JSON.stringify(validate(value, key)) };
+  });
+
+  const stmt = db.prepare(
+    `INSERT INTO settings (key, scope, scope_id, value) VALUES (@key, 'epic', @scopeId, @value)
+     ON CONFLICT(key, scope, scope_id) DO UPDATE SET value = excluded.value`,
+  );
+  const run = db.transaction((rows: { key: string; scopeId: string; value: string }[]) => {
+    for (const row of rows) stmt.run(row);
+  });
+  run(validated);
+
+  return db
+    .prepare("SELECT * FROM settings WHERE scope = 'epic' AND scope_id = ?")
+    .all(epicKey)
     .map(
       (r: any): Setting => ({
         key: r.key,

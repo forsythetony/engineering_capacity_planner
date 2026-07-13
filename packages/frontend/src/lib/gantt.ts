@@ -1,4 +1,4 @@
-import type { IsoDate, Sprint, TeamMember, WorkItem } from '@ecp/shared';
+import type { IsoDate, Sprint, TeamMember, UserStory, WorkItem } from '@ecp/shared';
 import { addDays } from '@ecp/shared';
 import { buildCapacityContext, weeklyPlan, type WeekPlan } from '@ecp/engine';
 import type { EpicScope } from './projection';
@@ -15,8 +15,23 @@ import type { EpicScope } from './projection';
 /** No label → this catch-all lane. */
 export const UNLABELED = 'Unlabeled';
 
-const primaryLabel = (w: WorkItem): string =>
-  w.labels && w.labels.length > 0 ? w.labels[0]! : UNLABELED;
+function effectiveLabels(
+  w: WorkItem,
+  story: UserStory | undefined,
+  applyParentLabels: boolean,
+  ignored: ReadonlySet<string>,
+): string[] {
+  const labels = [...(w.labels ?? [])];
+  if (applyParentLabels) labels.push(...(story?.labels ?? []));
+  return [...new Set(labels.map((l) => l.trim()).filter((l) => l !== '' && !ignored.has(l)))];
+}
+
+const primaryLabel = (
+  w: WorkItem,
+  story: UserStory | undefined,
+  applyParentLabels: boolean,
+  ignored: ReadonlySet<string>,
+): string => effectiveLabels(w, story, applyParentLabels, ignored)[0] ?? UNLABELED;
 
 const isDone = (w: WorkItem): boolean => w.status === 'Done';
 
@@ -69,6 +84,10 @@ export function buildGanttView(scope: EpicScope, sprintId: string | null): Gantt
   const sprint = scope.sprints.find((s) => s.id === sprintId) ?? scope.sprints[0] ?? null;
 
   const byKey = new Map(scope.workItems.map((w) => [w.key, w]));
+  const storyByKey = new Map(scope.stories.map((s) => [s.key, s]));
+  const ignoredLabels = new Set(scope.labelConfig.ignoreLabels);
+  const laneLabel = (w: WorkItem): string =>
+    primaryLabel(w, storyByKey.get(w.storyKey), scope.labelConfig.applyParentLabels, ignoredLabels);
   const ctx = buildCapacityContext({
     members: scope.members,
     pto: scope.pto,
@@ -88,7 +107,7 @@ export function buildGanttView(scope: EpicScope, sprintId: string | null): Gantt
     const item = byKey.get(p.workItemKey);
     if (!item) continue;
     placedKeys.add(item.key);
-    const key = cellKey(primaryLabel(item), p.weekIndex);
+    const key = cellKey(laneLabel(item), p.weekIndex);
     const cell = cells.get(key) ?? { items: [], points: 0 };
     cell.items.push(item);
     if (!isDone(item)) {
@@ -112,7 +131,7 @@ export function buildGanttView(scope: EpicScope, sprintId: string | null): Gantt
   // Lanes: distinct labels across the epic, biggest subdivision first.
   const totals = new Map<string, number>();
   for (const w of scope.workItems) {
-    const label = primaryLabel(w);
+    const label = laneLabel(w);
     totals.set(label, (totals.get(label) ?? 0) + w.points);
   }
   const lanes: GanttLane[] = [...totals.entries()]

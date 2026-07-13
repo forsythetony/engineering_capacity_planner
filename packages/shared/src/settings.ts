@@ -43,6 +43,10 @@ export const SETTING_KEYS = {
   JIRA_SPRINT_FIELD: 'jira_sprint_field',
   /** Field id carrying the labels that feed Gantt lanes (default the native `labels`). */
   JIRA_LABELS_FIELD: 'jira_labels_field',
+  /** Gantt Planner: include story labels when assigning work items to lanes. */
+  GANTT_APPLY_PARENT_LABELS: 'gantt_apply_parent_labels',
+  /** Gantt Planner: labels to ignore when assigning this epic's lanes. */
+  GANTT_IGNORE_LABELS: 'gantt_ignore_labels',
   /**
    * ISO-8601 datetime of the last successful sync, written by the sync endpoint.
    * Drives the top-nav Sync button's freshness color; `null` until first sync.

@@ -32,6 +32,12 @@ function settingValue<T>(dataset: DomainDataset, key: string, fallback: T): T {
   return row ? (JSON.parse(row.value) as T) : fallback;
 }
 
+/** Read a JSON-encoded epic setting, or `fallback` when absent. */
+function epicSettingValue<T>(dataset: DomainDataset, epicKey: string, key: string, fallback: T): T {
+  const row = dataset.settings.find((s) => s.scope === 'epic' && s.scopeId === epicKey && s.key === key);
+  return row ? (JSON.parse(row.value) as T) : fallback;
+}
+
 /** Shared mutation runner: run an API call, reload, and surface errors. */
 function useConfigActions(onReload: () => Promise<void>) {
   const [error, setError] = useState<string | null>(null);
@@ -80,6 +86,7 @@ export function Configuration({ dataset, teamId, epicKey, editable, onReload }: 
       )}
 
       <KnobsSection dataset={dataset} disabled={disabled} run={run} />
+      {epicKey ? <EpicLabelSection key={epicKey} dataset={dataset} epicKey={epicKey} disabled={disabled} run={run} /> : null}
       {team ? <CadenceSection team={team} disabled={disabled} run={run} /> : null}
       {teamId ? (
         <>
@@ -185,6 +192,70 @@ function KnobsSection({ dataset, disabled, run }: { dataset: DomainDataset; disa
             [SETTING_KEYS.WEEK_YELLOW_LOAD_FRACTION]: Number(weekYellow),
           }))}>
           Save knobs
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function parseLabelList(value: string): string[] {
+  return [
+    ...new Set(
+      value
+        .split(/[\n,]/)
+        .map((v) => v.trim())
+        .filter(Boolean),
+    ),
+  ];
+}
+
+function EpicLabelSection({ dataset, epicKey, disabled, run }: {
+  dataset: DomainDataset; epicKey: string; disabled: boolean; run: Run;
+}) {
+  const [applyParentLabels, setApplyParentLabels] = useState(
+    epicSettingValue(dataset, epicKey, SETTING_KEYS.GANTT_APPLY_PARENT_LABELS, false),
+  );
+  const [ignoreLabels, setIgnoreLabels] = useState(
+    epicSettingValue<string[]>(dataset, epicKey, SETTING_KEYS.GANTT_IGNORE_LABELS, []).join(', '),
+  );
+
+  return (
+    <section className="panel">
+      <SectionTitle title="Gantt labels" hint={`Lane rules for ${epicKey}.`} />
+      <div className="controls">
+        <label className="inline-check config-checkbox">
+          <input
+            type="checkbox"
+            checked={applyParentLabels}
+            disabled={disabled}
+            data-testid="cfg-apply-parent-labels"
+            onChange={(e) => setApplyParentLabels(e.target.checked)}
+          />
+          Apply parent labels
+        </label>
+        <Field
+          label="Ignore labels"
+          help="Comma- or line-separated labels to leave out when building Gantt lanes for this epic."
+        >
+          <textarea
+            rows={2}
+            value={ignoreLabels}
+            disabled={disabled}
+            data-testid="cfg-ignore-labels"
+            onChange={(e) => setIgnoreLabels(e.target.value)}
+          />
+        </Field>
+        <button
+          type="button"
+          className="btn"
+          disabled={disabled}
+          data-testid="cfg-labels-save"
+          onClick={() => run(() => api.patchEpicSettings(epicKey, {
+            [SETTING_KEYS.GANTT_APPLY_PARENT_LABELS]: applyParentLabels,
+            [SETTING_KEYS.GANTT_IGNORE_LABELS]: parseLabelList(ignoreLabels),
+          }))}
+        >
+          Save label rules
         </button>
       </div>
     </section>
