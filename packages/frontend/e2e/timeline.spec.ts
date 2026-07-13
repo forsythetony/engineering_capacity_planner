@@ -19,19 +19,30 @@ test.describe('Calendar / timeline tab', () => {
     await expect(page.getByTestId('marker-devcomplete')).toBeVisible();
   });
 
-  test('renders the detailed month calendar under the timeline', async ({ page }) => {
+  test('renders the full-width month calendar with navigation', async ({ page }) => {
     await page.goto('/');
 
     // The calendar sits below the linear timeline and above the backlog.
     const calendar = page.getByTestId('projection-calendar');
     await expect(calendar).toBeVisible();
-    // At least one month grid renders, with day cells.
-    await expect(calendar.locator('.cal-card')).not.toHaveCount(0);
-    await expect(calendar.locator('.cal-cell:not(.blank)').first()).toBeVisible();
-    // The projection anchors are surfaced on day cells: today, gating, dev-complete.
+    await expect(calendar.locator('.cal-month-grid')).toBeVisible();
+    await expect(calendar.locator('.cal-cell').first()).toBeVisible();
+
+    // Opens on the month containing "today", which is highlighted exactly once.
+    await expect(page.getByTestId('cal-current-month')).toHaveText('Jul 2026');
     await expect(calendar.locator('.cal-cell.is-today')).toHaveCount(1);
-    await expect(calendar.locator('.cal-mark.gating').first()).toBeVisible();
-    await expect(calendar.locator('.cal-mark.devcomplete').first()).toBeVisible();
+
+    // Paging forward reaches September, where the gating day and dev-complete land.
+    await page.getByTestId('cal-next').click();
+    await expect(page.getByTestId('cal-current-month')).toHaveText('Aug 2026');
+    await page.getByTestId('cal-next').click();
+    await expect(page.getByTestId('cal-current-month')).toHaveText('Sep 2026');
+    await expect(calendar.locator('.cal-event.gating').first()).toBeVisible();
+    await expect(calendar.locator('.cal-event.devcomplete').first()).toBeVisible();
+
+    // "Today" jumps back to the current month.
+    await page.getByTestId('cal-today-btn').click();
+    await expect(page.getByTestId('cal-current-month')).toHaveText('Jul 2026');
 
     // Ordering on the page: timeline → calendar → backlog.
     const timelineY = await page.getByTestId('timeline').evaluate((el) => el.getBoundingClientRect().top);
