@@ -78,6 +78,66 @@ describe('GET /api/jira/sample', () => {
   });
 });
 
+describe('GET /api/jira/ticket', () => {
+  /** A board with two linked work items (CKT-4 is blocked by CKT-3). */
+  async function seedLinkedBoard(): Promise<FakeJiraClient> {
+    const jira = new FakeJiraClient();
+    const epic = await jira.createIssue({
+      fields: { project: { key: 'CKT' }, issuetype: { name: 'Epic' }, summary: 'Checkout Revamp' },
+    });
+    const story = await jira.createIssue({
+      fields: { project: { key: 'CKT' }, issuetype: { name: 'Story' }, summary: 'Cart', parent: { key: epic.key } },
+    });
+    const a = await jira.createIssue({
+      fields: {
+        project: { key: 'CKT' }, issuetype: { name: 'Story' }, summary: 'Totals',
+        parent: { key: story.key }, customfield_10016: 5,
+      },
+    });
+    const b = await jira.createIssue({
+      fields: {
+        project: { key: 'CKT' }, issuetype: { name: 'Story' }, summary: 'Checkout button',
+        parent: { key: story.key }, customfield_10016: 3,
+      },
+    });
+    // a (CKT-3) blocks b (CKT-4): b is blocked by a.
+    await jira.createIssueLink({ type: 'Blocks', outwardKey: a.key, inwardKey: b.key });
+    return jira;
+  }
+
+  it('resolves a ticket, its numeric fields, and native blocking', async () => {
+    app = await jiraServer(await seedLinkedBoard());
+    const res = await app.inject({ method: 'GET', url: '/api/jira/ticket?ref=CKT-4' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+
+    expect(body.key).toBe('CKT-4');
+    expect(body.summary).toBe('Checkout button');
+    // The story-points custom field shows up as a numeric candidate.
+    expect(body.numericFields.some((f: any) => f.id === 'customfield_10016' && f.value === 3)).toBe(true);
+    // Blocking is the native "Blocks" link type — nothing to map by hand.
+    expect(body.blocks).toMatchObject({ linkType: 'Blocks', isNativeLink: true });
+    expect(body.blocks.blockedBy).toContain('CKT-3');
+    expect(body.blocks.customFieldCandidate).toBeNull();
+  });
+
+  it('accepts a browse URL and normalizes the key', async () => {
+    app = await jiraServer(await seedLinkedBoard());
+    const ref = encodeURIComponent('https://acme.atlassian.net/browse/CKT-3');
+    const res = await app.inject({ method: 'GET', url: `/api/jira/ticket?ref=${ref}` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().key).toBe('CKT-3');
+  });
+
+  it('400s on an unparseable ref and 404s on a missing ticket', async () => {
+    app = await jiraServer(await seedLinkedBoard());
+    const bad = await app.inject({ method: 'GET', url: '/api/jira/ticket?ref=not-a-key' });
+    expect(bad.statusCode).toBe(400);
+    const missing = await app.inject({ method: 'GET', url: '/api/jira/ticket?ref=CKT-999' });
+    expect(missing.statusCode).toBe(404);
+  });
+});
+
 describe('Jira setup wizard endpoints', () => {
   it('GET /api/jira/connection reports the authenticated user', async () => {
     app = await jiraServer(await seedFakeBoard());

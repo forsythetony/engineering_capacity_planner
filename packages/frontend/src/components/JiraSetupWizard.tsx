@@ -5,6 +5,7 @@ import * as api from '../data/api';
 import { memberColorMap } from '../lib/memberColors';
 import { MemberAvatar } from './MemberAvatar';
 import { JiraFieldMapper } from './JiraFieldMapper';
+import { TicketFieldModal } from './TicketFieldModal';
 import { Typeahead } from './Typeahead';
 
 /** Read a JSON-encoded global setting, or `fallback` when absent. */
@@ -95,16 +96,14 @@ export function JiraSetupWizard({ dataset, teamId, members, disabled, run, onRel
           <EpicStep projectKey={projectKey} epicKey={epicKey} disabled={disabled} run={run} onNext={() => setStep('fields')} />
         )}
         {step === 'fields' && (
-          <div>
-            <p className="hint wizard-help">
-              Point the roles below at the fields your board actually uses. Story points and the
-              “blocks” link type are required before you can sync.
-            </p>
-            <JiraFieldMapper dataset={dataset} disabled={disabled} run={run} project={projectKey ?? undefined} epic={epicKey ?? undefined} autoLoad />
-            <div className="wizard-nav">
-              <button type="button" className="btn" onClick={() => setStep('members')}>Next: team members →</button>
-            </div>
-          </div>
+          <FieldsStep
+            dataset={dataset}
+            projectKey={projectKey}
+            epicKey={epicKey}
+            disabled={disabled}
+            run={run}
+            onNext={() => setStep('members')}
+          />
         )}
         {step === 'members' && (
           <MembersStep teamId={teamId} members={members} disabled={disabled} run={run} onReload={onReload} />
@@ -256,6 +255,57 @@ function EpicStep({ projectKey, epicKey, disabled, run, onNext }: {
           Next: map fields →
         </button>
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Fields
+// ---------------------------------------------------------------------------
+function FieldsStep({ dataset, projectKey, epicKey, disabled, run, onNext }: {
+  dataset: DomainDataset; projectKey: string | null; epicKey: string | null; disabled: boolean; run: Run; onNext: () => void;
+}) {
+  const [showTicket, setShowTicket] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  return (
+    <div data-testid="wizard-fields">
+      <p className="hint wizard-help">
+        Point the roles below at the fields your board actually uses. Story points and the
+        “blocks” link type are required before you can sync.
+      </p>
+
+      <div className="ticket-cta" data-testid="wizard-ticket-cta">
+        <div>
+          <strong>Map from a ticket you know</strong>
+          <div className="hint">Enter a ticket number or URL and we’ll read its fields for you.</div>
+        </div>
+        <button type="button" className="btn primary" disabled={disabled} data-testid="wizard-open-ticket"
+          onClick={() => setShowTicket(true)}>
+          Enter a ticket →
+        </button>
+      </div>
+
+      <button type="button" className="link-btn" data-testid="wizard-toggle-advanced"
+        onClick={() => setShowAdvanced((v) => !v)}>
+        {showAdvanced ? '▾ Hide' : '▸ Prefer to browse a board sample?'}
+      </button>
+      {showAdvanced && (
+        <JiraFieldMapper dataset={dataset} disabled={disabled} run={run} project={projectKey ?? undefined} epic={epicKey ?? undefined} autoLoad />
+      )}
+
+      <div className="wizard-nav">
+        <button type="button" className="btn" onClick={onNext}>Next: team members →</button>
+      </div>
+
+      {showTicket && (
+        <TicketFieldModal
+          dataset={dataset}
+          disabled={disabled}
+          run={run}
+          initialRef={epicKey ?? ''}
+          onClose={() => setShowTicket(false)}
+        />
+      )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import type { DomainDataset, PlannedPlacement, Team, TeamMember } from '@ecp/shared';
+import type { DomainDataset, PlannedPlacement, SyncChange, Team, TeamMember } from '@ecp/shared';
 
 /**
  * What a sync did, for the API response / logs.
@@ -24,6 +24,8 @@ export interface ReconcileSummary {
 export interface ReconcileResult {
   merged: DomainDataset;
   summary: ReconcileSummary;
+  /** Itemized log of what this sync changed, for the sync-log UI. */
+  changes: SyncChange[];
 }
 
 /**
@@ -47,6 +49,8 @@ export interface ReconcileResult {
  * the usual transactional {@link import('./persist.js').writeDataset}.
  */
 export function reconcileDataset(current: DomainDataset, incoming: DomainDataset): ReconcileResult {
+  const changes: SyncChange[] = [];
+
   // --- Team: keep local cadence/name; refresh the anchor from synced sprints.
   const currentTeamsById = new Map(current.teams.map((t) => [t.id, t]));
   const mergedTeams: Team[] = [...current.teams];
@@ -89,9 +93,12 @@ export function reconcileDataset(current: DomainDataset, incoming: DomainDataset
       byAccount.set(account, added);
       accountToMemberId.set(account, added.id);
       membersAdded += 1;
+      changes.push({ category: 'member-added', entity: added.name, detail: `New teammate ${added.name} discovered from Jira` });
     }
   }
   const memberIds = new Set(mergedMembers.map((m) => m.id));
+  const memberName = (id: string | null): string =>
+    (id && mergedMembers.find((m) => m.id === id)?.name) || 'Unassigned';
 
   // Incoming work items carry the Jira accountId as their assignee; rewrite it
   // to whatever local member that account resolved to above.
@@ -99,6 +106,45 @@ export function reconcileDataset(current: DomainDataset, incoming: DomainDataset
     ...w,
     assigneeId: w.assigneeId ? (accountToMemberId.get(w.assigneeId) ?? null) : null,
   }));
+
+  // --- Work items: diff facts against what we last held, for the sync log.
+  const currentItems = new Map(current.workItems.map((w) => [w.key, w]));
+  const incomingKeys = new Set(remappedWorkItems.map((w) => w.key));
+  for (const w of remappedWorkItems) {
+    const prev = currentItems.get(w.key);
+    if (!prev) {
+      changes.push({ category: 'item-added', entity: w.key, detail: `Added “${w.title}” (${w.points} pts, ${w.status})` });
+      continue;
+    }
+    if (prev.status !== w.status) {
+      changes.push({ category: 'status', entity: w.key, detail: `Status ${prev.status} → ${w.status}` });
+    }
+    if (prev.points !== w.points) {
+      changes.push({ category: 'points', entity: w.key, detail: `Story points ${prev.points} → ${w.points}` });
+    }
+    if ((prev.assigneeId ?? null) !== (w.assigneeId ?? null)) {
+      changes.push({ category: 'assignee', entity: w.key, detail: `Reassigned ${memberName(prev.assigneeId ?? null)} → ${memberName(w.assigneeId ?? null)}` });
+    }
+  }
+  for (const w of current.workItems) {
+    if (!incomingKeys.has(w.key)) {
+      changes.push({ category: 'item-removed', entity: w.key, detail: `“${w.title}” is no longer in Jira` });
+    }
+  }
+
+  // --- Sprints: added / removed since last sync.
+  const currentSprintIds = new Set(current.sprints.map((s) => s.id));
+  const incomingSprintById = new Map(incoming.sprints.map((s) => [s.id, s]));
+  for (const s of incoming.sprints) {
+    if (!currentSprintIds.has(s.id)) {
+      changes.push({ category: 'sprint-added', entity: s.name, detail: `New sprint ${s.name} (${s.startDate} → ${s.endDate})` });
+    }
+  }
+  for (const s of current.sprints) {
+    if (!incomingSprintById.has(s.id)) {
+      changes.push({ category: 'sprint-removed', entity: s.name, detail: `Sprint ${s.name} no longer exists in Jira` });
+    }
+  }
 
   // --- Placements: preserve intent, pruning stale / completed slots.
   const incomingItems = new Map(remappedWorkItems.map((w) => [w.key, w]));
@@ -111,10 +157,13 @@ export function reconcileDataset(current: DomainDataset, incoming: DomainDataset
     const item = incomingItems.get(p.workItemKey);
     if (!item) {
       placementsDroppedMissingItem += 1;
+      changes.push({ category: 'placement-dropped', entity: p.workItemKey, detail: 'Removed from the plan — no longer in Jira' });
     } else if (item.status === 'Done') {
       placementsPulledDone += 1;
+      changes.push({ category: 'placement-pulled', entity: p.workItemKey, detail: 'Completed — pulled from its week, freeing capacity' });
     } else if (!incomingSprintIds.has(p.sprintId)) {
       placementsDroppedMissingSprint += 1;
+      changes.push({ category: 'placement-dropped', entity: p.workItemKey, detail: 'Removed from the plan — its sprint no longer exists' });
     } else {
       keptPlacements.push(p);
     }
@@ -154,6 +203,7 @@ export function reconcileDataset(current: DomainDataset, incoming: DomainDataset
 
   return {
     merged,
+    changes,
     summary: {
       epics: incoming.epics.length,
       stories: incoming.stories.length,

@@ -10,6 +10,7 @@ import type { AppConfig } from '../config.js';
 import type { Db } from '../db/database.js';
 import { readDataset, writeDataset } from '../db/persist.js';
 import { reconcileDataset } from '../db/reconcile.js';
+import { appendSyncLog, readSyncLog } from '../db/sync-log.js';
 import { createImporter } from '../importer/factory.js';
 import { HttpError } from '../http-error.js';
 import type { JiraClient } from '../jira/client.js';
@@ -47,10 +48,21 @@ export function registerSyncRoutes(
       throw new HttpError(502, `Sync failed: ${message}`);
     }
 
-    const { merged, summary } = reconcileDataset(current, incoming);
+    const { merged, summary, changes } = reconcileDataset(current, incoming);
     writeDataset(db, merged);
     const syncedAt = new Date().toISOString();
     recordSyncTime(db, syncedAt);
-    return { source: config.dataSource, summary, syncedAt };
+    // Record what changed so the sync-log cards can replay it later. writeDataset
+    // ran first and never touches sync_log, so this row persists.
+    appendSyncLog(db, {
+      syncedAt,
+      source: config.dataSource,
+      summary: summary as unknown as Record<string, number>,
+      changes,
+    });
+    return { source: config.dataSource, summary, changes, syncedAt };
   });
+
+  // The sync-log history, newest first (powers the Configuration tab's cards).
+  app.get('/api/sync/log', async () => ({ entries: readSyncLog(db) }));
 }

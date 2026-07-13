@@ -144,6 +144,46 @@ describe('reconcileDataset', () => {
     });
   });
 
+  it('emits an itemized change log for the sync-log UI', () => {
+    const current: DomainDataset = {
+      ...empty(),
+      teams: [team('T', '2026-01-27')],
+      sprints: [sprint('21')],
+      members: [member('u1', 'Ada', 10)],
+      workItems: [
+        { ...workItem('CKT-1', 'To Do'), points: 3, assigneeId: 'u1' }, // status will change
+        workItem('CKT-2', 'In Progress'), // will be removed from Jira
+        { ...workItem('CKT-3', 'To Do'), points: 3 }, // points will change
+      ],
+      placements: [placement('pl1', 'CKT-1', '21')],
+    };
+    const incoming: DomainDataset = {
+      ...empty(),
+      teams: [team('T', '2026-01-27')],
+      sprints: [sprint('21'), sprint('22')], // sprint 22 is new
+      members: [member('u1', 'Ada', 10), member('u2', 'Grace', 10)], // Grace is new
+      epics: [{ key: 'CKT', title: 'Checkout', teamId: 'T' }],
+      stories: [{ key: 'S1', epicKey: 'CKT', title: 'Story' }],
+      workItems: [
+        { ...workItem('CKT-1', 'Done'), points: 3, assigneeId: 'u1' }, // To Do → Done
+        { ...workItem('CKT-3', 'To Do'), points: 8 }, // 3 → 8 points
+        workItem('CKT-4', 'To Do'), // brand new item
+      ],
+    };
+    const { changes } = reconcileDataset(current, incoming);
+    const has = (category: string, entity: string) =>
+      changes.some((c) => c.category === category && c.entity === entity);
+
+    expect(has('status', 'CKT-1')).toBe(true);
+    expect(has('points', 'CKT-3')).toBe(true);
+    expect(has('item-added', 'CKT-4')).toBe(true);
+    expect(has('item-removed', 'CKT-2')).toBe(true);
+    expect(has('member-added', 'Grace')).toBe(true);
+    expect(has('sprint-added', '22')).toBe(true);
+    // CKT-1 came back Done, so its placement is pulled to free capacity.
+    expect(has('placement-pulled', 'CKT-1')).toBe(true);
+  });
+
   it('links a synced assignee onto a hand-created member and remaps assignments', () => {
     const current: DomainDataset = {
       ...empty(),

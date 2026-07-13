@@ -45,21 +45,37 @@ test.describe('Jira setup wizard & nav sync', () => {
     await page.getByTestId('typeahead-option').first().click();
     await expect(page.getByTestId('wizard-board-current')).toBeVisible();
 
-    // Fields step: the sample auto-loads; map story points + the blocks link.
+    // Fields step: map story points and confirm blocking from a real ticket.
     await page.getByTestId('wizard-step-fields').click();
-    const sample = page.getByTestId('cfg-jira-sample');
-    await expect(sample).toBeVisible();
-    const spRow = sample.locator('[data-testid="cfg-jira-field-row"]', {
-      has: page.locator('code', { hasText: 'customfield_10016' }),
-    });
-    await spRow.getByTestId('cfg-jira-use-story-points').click();
-    await page.getByTestId('cfg-jira-blocks-select').selectOption('Blocks');
-    await expect(page.getByTestId('cfg-jira-summary')).toContainText('customfield_10016');
+    await page.getByTestId('wizard-open-ticket').click();
+    const modal = page.getByTestId('ticket-modal');
+    await expect(modal).toBeVisible();
+    await modal.getByTestId('ticket-ref-input').fill('CKT-1');
+    await modal.getByTestId('ticket-lookup-btn').click();
+    await expect(modal.getByTestId('ticket-body')).toBeVisible();
+
+    // Point the story-points role at the estimate field…
+    await modal.getByTestId('ticket-use-points-customfield_10016').click();
+    // …and confirm the auto-detected native "Blocks" link type (no custom field).
+    await expect(modal.getByTestId('ticket-blocks-native')).toBeVisible();
+    await modal.getByTestId('ticket-blocks-confirm').click();
+    await modal.getByTestId('ticket-done').click();
 
     // With the required mapping in place, the nav Sync unlocks and runs.
     await expect(sync).not.toHaveAttribute('data-state', 'locked');
     await sync.click();
     await expect(page.getByTestId('nav-sync-msg')).toContainText(/Synced \d+ items/);
+
+    // The sync is now recorded as a clickable card in the sync log, whose modal
+    // lists what changed.
+    const firstCard = page.getByTestId('sync-log-card').first();
+    await expect(firstCard).toBeVisible();
+    await firstCard.click();
+    const logModal = page.getByTestId('sync-log-modal');
+    await expect(logModal).toBeVisible();
+    await expect(logModal).toContainText('from jira');
+    await logModal.locator('.modal-actions .btn').click();
+    await expect(logModal).toBeHidden();
 
     // Synced members carry their Jira avatar image (the demo board supplies a
     // self-contained data-URI avatar).

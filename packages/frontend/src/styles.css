@@ -1967,3 +1967,128 @@ button.tab:hover:not(.active) {
 
 .member-link-picker { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 200px; }
 .member-link-picker .typeahead { flex: 1; }
+
+/* ---------------------------------------------------------------------------
+   Ticket-driven field mapper (project plan §7)
+   --------------------------------------------------------------------------- */
+.ticket-cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  margin: 4px 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+}
+.ticket-cta strong { font-size: 14px; }
+
+.ticket-modal { max-width: 640px; max-height: 86vh; overflow-y: auto; }
+.ticket-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.ticket-modal-head h3 { margin: 0; }
+.ticket-lookup { display: flex; gap: 8px; margin: 6px 0 4px; }
+.ticket-lookup input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 11px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+}
+.ticket-hint { margin: 4px 0; }
+
+.ticket-body { margin-top: 8px; }
+.ticket-card {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-2);
+  margin-bottom: 14px;
+}
+.ticket-card-key { font-family: ui-monospace, monospace; font-size: 12px; color: var(--accent); }
+.ticket-card-summary { font-size: 15px; font-weight: 600; margin: 2px 0 6px; }
+.ticket-card-meta { display: flex; align-items: center; gap: 8px; }
+
+.ticket-section { margin: 16px 0; }
+.ticket-section h4 { margin: 0 0 4px; font-size: 14px; }
+.ticket-field-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.ticket-field-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+.ticket-field-row.mapped { border-color: var(--green-dim); background: color-mix(in srgb, var(--green) 8%, var(--panel)); }
+.ticket-field-meta { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.ticket-field-row .jira-field-value { margin-left: auto; }
+.ticket-blocks .conn-card { margin-top: 6px; }
+.ticket-blocks .conn-card .btn-tiny { margin-top: 8px; }
+
+/* ---------------------------------------------------------------------------
+   Sync log (project plan §7)
+   --------------------------------------------------------------------------- */
+.sync-log-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+  margin-top: 4px;
+}
+.sync-log-card {
+  text-align: left;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--panel-2);
+  color: var(--text);
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.12s, transform 0.12s;
+}
+.sync-log-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+.sync-log-card-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.sync-log-when { font-size: 13px; font-weight: 600; }
+.sync-log-count { font-size: 11px; color: var(--muted); }
+.sync-log-headline { font-size: 12px; color: var(--muted); margin: 6px 0 2px; }
+.sync-log-source { font-size: 11px; color: var(--muted); font-style: italic; }
+
+.sync-log-detail { max-width: 620px; max-height: 86vh; overflow-y: auto; }
+.sync-change-list { list-style: none; padding: 0; margin: 4px 0 0; display: flex; flex-direction: column; gap: 6px; }
+.sync-change-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  font-size: 13px;
+}
+.sync-change-tag {
+  flex: none;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 2px 7px;
+  border-radius: 6px;
+  width: 74px;
+  text-align: center;
+}
+.sync-change-tag.tone-green { background: color-mix(in srgb, var(--green) 22%, var(--panel)); color: var(--green); }
+.sync-change-tag.tone-red   { background: color-mix(in srgb, var(--red) 22%, var(--panel));   color: var(--red); }
+.sync-change-tag.tone-blue  { background: color-mix(in srgb, var(--accent) 22%, var(--panel)); color: var(--accent); }
+.sync-change-entity { flex: none; font-size: 12px; color: var(--text); }
+.sync-change-detail { color: var(--muted); }
