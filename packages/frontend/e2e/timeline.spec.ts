@@ -19,6 +19,28 @@ test.describe('Calendar / timeline tab', () => {
     await expect(page.getByTestId('marker-devcomplete')).toBeVisible();
   });
 
+  test('renders the detailed month calendar under the timeline', async ({ page }) => {
+    await page.goto('/');
+
+    // The calendar sits below the linear timeline and above the backlog.
+    const calendar = page.getByTestId('projection-calendar');
+    await expect(calendar).toBeVisible();
+    // At least one month grid renders, with day cells.
+    await expect(calendar.locator('.cal-card')).not.toHaveCount(0);
+    await expect(calendar.locator('.cal-cell:not(.blank)').first()).toBeVisible();
+    // The projection anchors are surfaced on day cells: today, gating, dev-complete.
+    await expect(calendar.locator('.cal-cell.is-today')).toHaveCount(1);
+    await expect(calendar.locator('.cal-mark.gating').first()).toBeVisible();
+    await expect(calendar.locator('.cal-mark.devcomplete').first()).toBeVisible();
+
+    // Ordering on the page: timeline → calendar → backlog.
+    const timelineY = await page.getByTestId('timeline').evaluate((el) => el.getBoundingClientRect().top);
+    const calendarY = await calendar.evaluate((el) => el.getBoundingClientRect().top);
+    const backlogY = await page.getByTestId('work-items').evaluate((el) => el.getBoundingClientRect().top);
+    expect(timelineY).toBeLessThan(calendarY);
+    expect(calendarY).toBeLessThan(backlogY);
+  });
+
   test('renders the backlog grouped by story, without cut / mark-done controls', async ({ page }) => {
     await page.goto('/');
 

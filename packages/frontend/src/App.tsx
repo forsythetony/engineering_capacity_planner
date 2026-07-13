@@ -4,12 +4,15 @@ import { Configuration } from './components/Configuration';
 import { DependencyGraph } from './components/DependencyGraph';
 import { GanttBoard } from './components/GanttBoard';
 import { JiraLink } from './components/JiraLink';
+import { ProjectionCalendar } from './components/ProjectionCalendar';
 import { StatusStrip } from './components/StatusStrip';
 import { SyncButton } from './components/SyncButton';
 import { Timeline } from './components/Timeline';
 import { WorkItemList } from './components/WorkItemList';
 import { loadDataset, type DatasetSource } from './data/loadDataset';
+import { buildAvailabilityEntries } from './lib/availability';
 import { formatDate } from './lib/format';
+import { memberColorMap } from './lib/memberColors';
 import { runScenario, scopeEpic, type Scenario } from './lib/projection';
 
 /** Today's date as an ISO `YYYY-MM-DD` string (UTC). */
@@ -92,6 +95,13 @@ function Planner({
   // timeline prompts the user to add one; the other tabs work regardless.
   const result = useMemo(() => (scope.gating ? runScenario(scope, scenario) : null), [scope, scenario]);
 
+  // PTO / on-call bands for the team, used by the calendar's day-level "who's
+  // out" dots (velocity overrides aren't absences, so they're excluded here).
+  const availability = useMemo(() => {
+    const colors = memberColorMap(scope.members);
+    return buildAvailabilityEntries(dataset, scope.members, colors).filter((e) => e.kind !== 'velocity');
+  }, [dataset, scope.members]);
+
   return (
     <div className="app">
       <header className="app-header">
@@ -170,6 +180,17 @@ function Planner({
                 Gating relevant day: <strong>{scope.gating.name}</strong> on{' '}
                 {formatDate(scope.gating.date)}. The projection re-runs on every change below.
               </p>
+            </div>
+          )}
+
+          {scope.gating && result && (
+            <div className="panel">
+              <ProjectionCalendar
+                scope={scope}
+                result={result}
+                today={scenario.today}
+                availability={availability}
+              />
             </div>
           )}
 
