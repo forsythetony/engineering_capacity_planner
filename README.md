@@ -156,8 +156,20 @@ capacity.
 **Credentials** (`JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`) live in the
 environment only, never in the database. **Field mapping** (which custom field
 is story points, the sprint field, the "blocks" link type, …) is set in the app
-— Configuration → Jira mapping resolves it from a live sample of your board —
-and persisted to the database.
+and persisted to the database. The quickest way is **ticket-driven**: on
+Configuration → Connect to Jira → Fields, click **Enter a ticket**, paste a
+ticket number or browse URL, and map the roles from that real issue in the
+modal that opens. Story points is a click; **blocking is auto-resolved** — it's
+Jira's native `Blocks` issue-link type, not a custom field, so the app detects
+it, confirms it for you, and says so instead of asking you to hunt for a field
+that doesn't exist. (A board-sample picker is still available under "Prefer to
+browse a board sample?" for the same result.)
+
+**Sync log.** Every sync records what its reconcile changed — items added /
+removed, status and point changes, reassignments, completed work pulled from the
+plan, new sprints and teammates. Configuration → **Sync log** shows one card per
+sync; click a card for the full itemized list. The log lives in its own table,
+so it survives the dataset re-import each sync performs.
 
 Prove the loop end-to-end against a real instance:
 

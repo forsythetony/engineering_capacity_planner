@@ -94,6 +94,31 @@ describe('POST /api/sync', () => {
     expect(data.placements[0]).toMatchObject({ workItemKey: 'CKT-3', sprintId: '21' });
   });
 
+  it('records a sync-log entry with itemized changes', async () => {
+    app = await jiraServer(await seedFakeBoard());
+
+    const sync = await app.inject({ method: 'POST', url: '/api/sync' });
+    expect(sync.statusCode).toBe(200);
+    // The sync response carries the change list…
+    expect(Array.isArray(sync.json().changes)).toBe(true);
+    expect(sync.json().changes.some((c: any) => c.category === 'item-added' && c.entity === 'CKT-3')).toBe(true);
+
+    // …and it's persisted to the queryable sync log.
+    const log = await app.inject({ method: 'GET', url: '/api/sync/log' });
+    expect(log.statusCode).toBe(200);
+    const entries = log.json().entries;
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ source: 'jira' });
+    expect(entries[0].summary.workItems).toBe(1);
+    expect(entries[0].changes.some((c: any) => c.entity === 'CKT-3')).toBe(true);
+
+    // A second sync (Jira unchanged) appends a second, empty-diff entry —
+    // proving the log survives the dataset-replacing write.
+    await app.inject({ method: 'POST', url: '/api/sync' });
+    const log2 = await app.inject({ method: 'GET', url: '/api/sync/log' });
+    expect(log2.json().entries).toHaveLength(2);
+  });
+
   it('returns 400 when the field mapping is incomplete', async () => {
     const jira = await seedFakeBoard();
     // No settings patched → no story-points field mapped anywhere.

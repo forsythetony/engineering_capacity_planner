@@ -3,6 +3,8 @@ import type {
   Oncall,
   PlannedPlacement,
   Pto,
+  SyncChange,
+  SyncLogEntry,
   Team,
   TeamMember,
   VelocityOverride,
@@ -50,8 +52,34 @@ export interface JiraSampleResponse {
 export interface SyncResponse {
   source: string;
   summary: Record<string, number>;
+  changes?: SyncChange[];
   /** ISO datetime of this sync. */
   syncedAt?: string;
+}
+
+/** Analysis of one specific ticket, for the ticket-driven field mapper. */
+export interface JiraFieldRef {
+  id: string;
+  name: string;
+  custom: boolean;
+  type: string | null;
+}
+export interface JiraTicketResponse {
+  key: string;
+  summary: string | null;
+  status: string | null;
+  issueType: string | null;
+  fields: Record<string, unknown>;
+  catalog: JiraFieldRef[];
+  numericFields: Array<JiraFieldRef & { value: number }>;
+  linkTypes: Array<{ id: string; name: string; inward: string; outward: string }>;
+  blocks: {
+    linkType: string | null;
+    isNativeLink: boolean;
+    blockedBy: string[];
+    blocking: string[];
+    customFieldCandidate: JiraFieldRef | null;
+  };
 }
 
 /** Fetch the field catalog + a sample issue so the user can map fields live. */
@@ -63,8 +91,15 @@ export const getJiraSample = (params: { project?: string; epic?: string } = {}):
   return request('GET', `/api/jira/sample${qs ? `?${qs}` : ''}`);
 };
 
+/** Look up one specific ticket (by key or browse URL) for the field mapper. */
+export const getJiraTicket = (ref: string): Promise<JiraTicketResponse> =>
+  request('GET', `/api/jira/ticket${qs({ ref })}`);
+
 /** Re-import from Jira and reconcile onto local state. */
 export const syncNow = (): Promise<SyncResponse> => request('POST', '/api/sync');
+
+/** The persisted sync-log history, newest first. */
+export const getSyncLog = (): Promise<{ entries: SyncLogEntry[] }> => request('GET', '/api/sync/log');
 
 // --- Jira setup wizard (project plan §7) -----------------------------------
 export interface JiraConnection {

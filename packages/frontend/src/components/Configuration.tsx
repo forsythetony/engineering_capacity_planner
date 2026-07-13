@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { DomainDataset, IsoDate, TeamMember, Weekday } from '@ecp/shared';
-import { SETTING_KEYS } from '@ecp/shared';
+import { globalStringSetting, SETTING_KEYS } from '@ecp/shared';
 import { formatDate } from '../lib/format';
 import { memberColorMap } from '../lib/memberColors';
 import { buildAvailabilityEntries, type AvailabilityEntry, type AvailabilityKind } from '../lib/availability';
@@ -10,6 +10,7 @@ import { AvailabilityList } from './AvailabilityList';
 import { AddAvailabilityModal, type NewAvailability } from './AddAvailabilityModal';
 import { MemberAvatar } from './MemberAvatar';
 import { JiraSetupWizard } from './JiraSetupWizard';
+import { SyncLog } from './SyncLog';
 
 interface ConfigurationProps {
   dataset: DomainDataset;
@@ -97,6 +98,10 @@ export function Configuration({ dataset, teamId, epicKey, editable, onReload }: 
         disabled={disabled}
         run={run}
         onReload={onReload}
+      />
+      <SyncLog
+        editable={editable}
+        refreshKey={globalStringSetting(dataset.settings, SETTING_KEYS.LAST_SYNCED_AT)}
       />
     </div>
   );

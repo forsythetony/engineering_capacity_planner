@@ -6,7 +6,7 @@
  * `customfield_*` id. The app records the canonical id and uses it thereafter.
  */
 import type { Setting } from '@ecp/shared';
-import { SETTING_KEYS } from '@ecp/shared';
+import { isBlocksLinkType, parseJiraTicketKey, SETTING_KEYS } from '@ecp/shared';
 import type { FastifyInstance } from 'fastify';
 import type { AppConfig } from '../config.js';
 import type { Db } from '../db/database.js';
@@ -75,6 +75,48 @@ export interface JiraSampleResponse {
   /** Field catalog: canonical id → human name + value type. */
   catalog: Array<{ id: string; name: string; custom: boolean; type: string | null }>;
   linkTypes: Array<{ id: string; name: string; inward: string; outward: string }>;
+}
+
+export interface JiraFieldRef {
+  id: string;
+  name: string;
+  custom: boolean;
+  type: string | null;
+}
+
+/**
+ * How the target ticket represents its "blocks / is blocked by" relationships.
+ * In stock Jira this is the native `Blocks` issue-link type — there's nothing to
+ * map, so the UI can auto-confirm it and tell the user. If a team modeled
+ * blocking through a *custom field* instead, {@link customFieldCandidate}
+ * surfaces it so it can be mapped like story points.
+ */
+export interface JiraBlocksAnalysis {
+  /** The link type name that expresses blocking, auto-detected, or null. */
+  linkType: string | null;
+  /** True when blocking is Jira's native issue-link mechanism (the common case). */
+  isNativeLink: boolean;
+  /** Keys this ticket is blocked by, per its issue links. */
+  blockedBy: string[];
+  /** Keys this ticket blocks, per its issue links. */
+  blocking: string[];
+  /** A custom field on this ticket whose name mentions "block", if any. */
+  customFieldCandidate: JiraFieldRef | null;
+}
+
+export interface JiraTicketResponse {
+  /** Normalized key we resolved from the user's input. */
+  key: string;
+  summary: string | null;
+  status: string | null;
+  issueType: string | null;
+  /** The issue's full fields, so the picker can preview values. */
+  fields: Record<string, unknown>;
+  catalog: JiraFieldRef[];
+  /** Custom fields currently holding a finite number — story-point candidates. */
+  numericFields: Array<JiraFieldRef & { value: number }>;
+  linkTypes: Array<{ id: string; name: string; inward: string; outward: string }>;
+  blocks: JiraBlocksAnalysis;
 }
 
 /** Case-insensitive substring match, tolerant of an empty query (matches all). */
@@ -235,5 +277,90 @@ export function registerJiraRoutes(
     } catch (err) {
       throw new HttpError(502, `Jira request failed: ${err instanceof Error ? err.message : String(err)}`);
     }
+  });
+
+  // --- Ticket-driven field mapping (project plan §7) -----------------------
+  // Fetch one specific ticket (by key or browse URL) so the user maps fields
+  // from a real, familiar issue instead of a random sample. Also analyzes how
+  // that ticket represents blocking, so the UI can auto-confirm the native link
+  // type (and omit the manual step) or surface a custom field when one is used.
+  app.get('/api/jira/ticket', async (req): Promise<JiraTicketResponse> => {
+    const q = (req.query ?? {}) as { ref?: string };
+    const raw = (q.ref ?? '').trim();
+    if (raw === '') throw new HttpError(400, 'Enter a Jira ticket number or URL.');
+    const key = parseJiraTicketKey(raw);
+    if (!key) {
+      throw new HttpError(400, `“${raw}” doesn’t look like a Jira ticket. Try a key like CKT-42 or a browse URL.`);
+    }
+
+    let jira: JiraClient;
+    try {
+      jira = buildJiraClient(config.jira, jiraClient);
+    } catch (err) {
+      throw new HttpError(400, err instanceof Error ? err.message : String(err));
+    }
+
+    let issue;
+    let catalog;
+    let linkTypes;
+    try {
+      [catalog, linkTypes] = await Promise.all([jira.listFields(), jira.listIssueLinkTypes()]);
+      issue = await jira.getIssue(key, ['*all']);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      // A missing issue is the user's typo to fix, not a server fault.
+      if (/not found|does not exist|404/i.test(message)) {
+        throw new HttpError(404, `Ticket ${key} was not found in Jira.`);
+      }
+      throw new HttpError(502, `Jira request failed: ${message}`);
+    }
+
+    const fields = (issue.fields ?? {}) as Record<string, unknown>;
+    const catalogRefs: JiraFieldRef[] = catalog.map((c) => ({
+      id: c.id,
+      name: c.name,
+      custom: c.custom,
+      type: c.schema?.type ?? null,
+    }));
+
+    // Custom fields that currently hold a finite number are story-point candidates.
+    const numericFields = catalogRefs
+      .filter((c) => c.custom)
+      .map((c) => ({ ...c, value: fields[c.id] }))
+      .filter((c): c is JiraFieldRef & { value: number } => typeof c.value === 'number' && Number.isFinite(c.value));
+
+    // Blocking analysis: prefer a link type actually present on this ticket;
+    // otherwise fall back to the catalog's blocks-semantic type.
+    const links = Array.isArray(issue.fields.issuelinks) ? issue.fields.issuelinks : [];
+    const blockedBy: string[] = [];
+    const blocking: string[] = [];
+    let presentBlocksType: string | null = null;
+    for (const link of links) {
+      if (!isBlocksLinkType(link.type)) continue;
+      presentBlocksType = link.type.name;
+      if (link.inwardIssue?.key) blockedBy.push(link.inwardIssue.key);
+      if (link.outwardIssue?.key) blocking.push(link.outwardIssue.key);
+    }
+    const catalogBlocksType = linkTypes.find((t) => isBlocksLinkType(t))?.name ?? null;
+    const customFieldCandidate =
+      catalogRefs.find((c) => c.custom && /block/i.test(c.name) && fields[c.id] != null) ?? null;
+
+    return {
+      key: issue.key,
+      summary: (issue.fields.summary as string | undefined) ?? null,
+      status: issue.fields.status?.name ?? null,
+      issueType: issue.fields.issuetype?.name ?? null,
+      fields,
+      catalog: catalogRefs,
+      numericFields,
+      linkTypes: linkTypes.map((t) => ({ id: t.id, name: t.name, inward: t.inward, outward: t.outward })),
+      blocks: {
+        linkType: presentBlocksType ?? catalogBlocksType,
+        isNativeLink: (presentBlocksType ?? catalogBlocksType) !== null,
+        blockedBy,
+        blocking,
+        customFieldCandidate,
+      },
+    };
   });
 }

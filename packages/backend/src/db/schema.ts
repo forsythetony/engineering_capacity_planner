@@ -125,6 +125,19 @@ CREATE TABLE IF NOT EXISTS settings (
   PRIMARY KEY (key, scope, scope_id)
 );
 
+-- Sync log (project plan §7): one row per successful sync, recording what
+-- reconcile changed. Deliberately *outside* INSERT_ORDER/DELETE_ORDER so the
+-- dataset-replacing writeDataset() never clears it — the history accretes.
+CREATE TABLE IF NOT EXISTS sync_log (
+  id        TEXT PRIMARY KEY,
+  synced_at TEXT NOT NULL,
+  source    TEXT NOT NULL,
+  -- JSON: the ReconcileSummary counts.
+  summary   TEXT NOT NULL,
+  -- JSON: an array of SyncChange entries (the itemized card modal).
+  changes   TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_member_team       ON team_member(team_id);
 CREATE INDEX IF NOT EXISTS idx_story_epic         ON user_story(epic_key);
 CREATE INDEX IF NOT EXISTS idx_work_item_story    ON work_item(story_key);
@@ -134,6 +147,7 @@ CREATE INDEX IF NOT EXISTS idx_dep_blocker        ON dependency(blocker_item_key
 CREATE INDEX IF NOT EXISTS idx_dep_blocked        ON dependency(blocked_item_key);
 CREATE INDEX IF NOT EXISTS idx_sprint_team        ON sprint(team_id);
 CREATE INDEX IF NOT EXISTS idx_placement_sprint   ON planned_placement(sprint_id);
+CREATE INDEX IF NOT EXISTS idx_sync_log_time       ON sync_log(synced_at);
 `;
 
 /** Order tables must be inserted into to satisfy foreign keys. */
