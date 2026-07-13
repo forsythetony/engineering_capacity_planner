@@ -32,6 +32,11 @@ test.describe('Calendar / timeline tab', () => {
     await expect(page.getByTestId('cal-current-month')).toHaveText('Jul 2026');
     await expect(calendar.locator('.cal-cell.is-today')).toHaveCount(1);
 
+    // Multi-day work is drawn as spanning bars: sprints (hero) and their weeks.
+    await expect(calendar.locator('.cal-bar.sprint').first()).toBeVisible();
+    await expect(calendar.locator('.cal-bar.week').first()).toBeVisible();
+    await expect(calendar.locator('.cal-bar.avail').first()).toBeVisible();
+
     // Paging forward reaches September, where the gating day and dev-complete land.
     await page.getByTestId('cal-next').click();
     await expect(page.getByTestId('cal-current-month')).toHaveText('Aug 2026');
@@ -55,15 +60,19 @@ test.describe('Calendar / timeline tab', () => {
     await page.getByTestId('timeline').click();
     await expect(page.getByTestId('cal-filter-menu')).toBeHidden();
 
-    // "Today" jumps back to the current month, where availability pills show.
+    // "Today" jumps back to the current month, where the spanning bars show.
     await page.getByTestId('cal-today-btn').click();
     await expect(page.getByTestId('cal-current-month')).toHaveText('Jul 2026');
-    await expect(calendar.locator('.cal-event.avail').first()).toBeVisible();
-    // The filter hides team availability, and the badge reflects the hidden layer.
+    await expect(calendar.locator('.cal-bar.avail').first()).toBeVisible();
+    // The filter hides team availability and sprint weeks; the badge counts them.
     await page.getByTestId('cal-filter-btn').click();
     await page.getByTestId('cal-filter-availability').uncheck();
-    await expect(calendar.locator('.cal-event.avail')).toHaveCount(0);
-    await expect(page.locator('.cal-filter-badge')).toHaveText('1');
+    await expect(calendar.locator('.cal-bar.avail')).toHaveCount(0);
+    await page.getByTestId('cal-filter-sprintWeeks').uncheck();
+    await expect(calendar.locator('.cal-bar.week')).toHaveCount(0);
+    // Sprints stay visible; the badge reflects the two hidden layers.
+    await expect(calendar.locator('.cal-bar.sprint').first()).toBeVisible();
+    await expect(page.locator('.cal-filter-badge')).toHaveText('2');
 
     // Ordering on the page: timeline → calendar → backlog.
     const timelineY = await page.getByTestId('timeline').evaluate((el) => el.getBoundingClientRect().top);
