@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { IsoDate } from '@ecp/shared';
 import { addDays, formatIso, getWeekday, isWorkingDay, parseIso } from '@ecp/shared';
 import type { ProjectionResult, Verdict } from '@ecp/engine';
@@ -28,6 +28,24 @@ interface CalEvent {
   verdict?: Verdict;
   /** Present for `avail` events. */
   entry?: AvailabilityEntry;
+}
+
+/** Toggleable layers exposed by the filter menu. All default to visible. */
+type Layer = 'milestones' | 'devComplete' | 'sprints' | 'availability';
+type Filters = Record<Layer, boolean>;
+const FILTER_OPTIONS: ReadonlyArray<{ key: Layer; label: string }> = [
+  { key: 'milestones', label: 'Relevant days' },
+  { key: 'devComplete', label: 'Dev-complete' },
+  { key: 'sprints', label: 'Sprint boundaries' },
+  { key: 'availability', label: 'Team availability' },
+];
+
+/** Which filter layer an event belongs to. */
+function layerOf(kind: EventKind): Layer {
+  if (kind === 'gating' || kind === 'milestone') return 'milestones';
+  if (kind === 'devcomplete') return 'devComplete';
+  if (kind === 'sprint') return 'sprints';
+  return 'availability';
 }
 
 /**
@@ -99,6 +117,33 @@ export function ProjectionCalendar({ scope, result, today, availability }: Proje
   const monthNum = parseIso(monthStart).getUTCMonth();
   const gridDays = useMemo(() => monthGridDays(monthStart), [monthStart]);
 
+  // Layer visibility toggles, driven by the filter menu.
+  const [filters, setFilters] = useState<Filters>({
+    milestones: true,
+    devComplete: true,
+    sprints: true,
+    availability: true,
+  });
+  const hiddenCount = FILTER_OPTIONS.filter((o) => !filters[o.key]).length;
+
+  const [filterOpen, setFilterOpen] = useState(false);
+  const filterRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!filterOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (filterRef.current && !filterRef.current.contains(e.target as Node)) setFilterOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setFilterOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [filterOpen]);
+
   return (
     <div className="proj-calendar" data-testid="projection-calendar">
       <div className="cal-toolbar">
@@ -108,7 +153,46 @@ export function ProjectionCalendar({ scope, result, today, availability }: Proje
             Day-by-day detail for the projection window — the headline dates stay on the timeline above.
           </span>
         </div>
-        <div className="cal-nav">
+        <div className="cal-controls">
+          <div className="cal-filter" ref={filterRef}>
+            <button
+              type="button"
+              className={`cal-filter-btn${hiddenCount > 0 ? ' has-hidden' : ''}`}
+              data-testid="cal-filter-btn"
+              aria-haspopup="true"
+              aria-expanded={filterOpen}
+              onClick={() => setFilterOpen((v) => !v)}
+            >
+              <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                <path
+                  d="M1.5 2.5h13l-5 6v5l-3-1.5v-3.5z"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              Filter
+              {hiddenCount > 0 && <span className="cal-filter-badge">{hiddenCount}</span>}
+            </button>
+            {filterOpen && (
+              <div className="cal-filter-menu" role="menu" data-testid="cal-filter-menu">
+                <div className="cal-filter-title">Show on calendar</div>
+                {FILTER_OPTIONS.map((opt) => (
+                  <label className="cal-filter-item" key={opt.key} role="menuitemcheckbox" aria-checked={filters[opt.key]}>
+                    <input
+                      type="checkbox"
+                      data-testid={`cal-filter-${opt.key}`}
+                      checked={filters[opt.key]}
+                      onChange={(e) => setFilters((f) => ({ ...f, [opt.key]: e.target.checked }))}
+                    />
+                    {opt.label}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="cal-nav">
           <button
             type="button"
             className="cal-nav-btn"
@@ -143,6 +227,7 @@ export function ProjectionCalendar({ scope, result, today, availability }: Proje
               Today
             </button>
           )}
+          </div>
         </div>
       </div>
 
@@ -155,7 +240,7 @@ export function ProjectionCalendar({ scope, result, today, availability }: Proje
         {gridDays.map((date) => {
           const inMonth = parseIso(date).getUTCMonth() === monthNum;
           const inRange = date >= domain.start && date <= domain.end;
-          const events = eventsByDay.get(date) ?? [];
+          const events = (eventsByDay.get(date) ?? []).filter((ev) => filters[layerOf(ev.kind)]);
           const sprint = sprintIndexFor(date);
           const working = isWorkingDay(date, scope.team.workingDays);
           const isToday = date === today;
@@ -164,7 +249,8 @@ export function ProjectionCalendar({ scope, result, today, availability }: Proje
           if (!inMonth) classes.push('adjacent');
           if (!working) classes.push('non-working');
           if (isToday) classes.push('is-today');
-          if (sprint !== null) classes.push(sprint % 2 === 0 ? 'sprint-even' : 'sprint-odd');
+          // Sprint shading follows the sprint-boundaries filter.
+          if (sprint !== null && filters.sprints) classes.push(sprint % 2 === 0 ? 'sprint-even' : 'sprint-odd');
 
           return (
             <div

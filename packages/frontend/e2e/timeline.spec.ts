@@ -40,9 +40,30 @@ test.describe('Calendar / timeline tab', () => {
     await expect(calendar.locator('.cal-event.gating').first()).toBeVisible();
     await expect(calendar.locator('.cal-event.devcomplete').first()).toBeVisible();
 
-    // "Today" jumps back to the current month.
+    // The filter hides the gating pill when "Relevant days" is unchecked.
+    await page.getByTestId('cal-filter-btn').click();
+    await expect(page.getByTestId('cal-filter-menu')).toBeVisible();
+    await page.getByTestId('cal-filter-milestones').uncheck();
+    await expect(calendar.locator('.cal-event.gating')).toHaveCount(0);
+    // Dev-complete is a separate layer and stays visible.
+    await expect(calendar.locator('.cal-event.devcomplete').first()).toBeVisible();
+    // Re-checking brings the gating pill back.
+    await page.getByTestId('cal-filter-milestones').check();
+    await expect(calendar.locator('.cal-event.gating').first()).toBeVisible();
+
+    // Clicking outside the menu closes it.
+    await page.getByTestId('timeline').click();
+    await expect(page.getByTestId('cal-filter-menu')).toBeHidden();
+
+    // "Today" jumps back to the current month, where availability pills show.
     await page.getByTestId('cal-today-btn').click();
     await expect(page.getByTestId('cal-current-month')).toHaveText('Jul 2026');
+    await expect(calendar.locator('.cal-event.avail').first()).toBeVisible();
+    // The filter hides team availability, and the badge reflects the hidden layer.
+    await page.getByTestId('cal-filter-btn').click();
+    await page.getByTestId('cal-filter-availability').uncheck();
+    await expect(calendar.locator('.cal-event.avail')).toHaveCount(0);
+    await expect(page.locator('.cal-filter-badge')).toHaveText('1');
 
     // Ordering on the page: timeline → calendar → backlog.
     const timelineY = await page.getByTestId('timeline').evaluate((el) => el.getBoundingClientRect().top);
