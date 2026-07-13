@@ -52,6 +52,28 @@ describe('settings', () => {
     expectHttp(() => repo.upsertGlobalSettings(db, { [SETTING_KEYS.GREEN_MIN_BUFFER_DAYS]: -1 }), 400);
     expectHttp(() => repo.upsertGlobalSettings(db, {}), 400);
   });
+
+  it('upserts epic-scoped Gantt label settings', () => {
+    const settings = repo.upsertEpicSettings(db, 'CKT', {
+      [SETTING_KEYS.GANTT_APPLY_PARENT_LABELS]: true,
+      [SETTING_KEYS.GANTT_IGNORE_LABELS]: [' Team ', '', 'Team', 'Jira'],
+    });
+    expect(JSON.parse(settings.find((s) => s.key === SETTING_KEYS.GANTT_APPLY_PARENT_LABELS)!.value)).toBe(true);
+    expect(JSON.parse(settings.find((s) => s.key === SETTING_KEYS.GANTT_IGNORE_LABELS)!.value)).toEqual(['Team', 'Jira']);
+
+    const persisted = readDataset(db).settings.filter((s) => s.scope === 'epic' && s.scopeId === 'CKT');
+    expect(persisted.map((s) => s.key).sort()).toEqual([
+      SETTING_KEYS.GANTT_APPLY_PARENT_LABELS,
+      SETTING_KEYS.GANTT_IGNORE_LABELS,
+    ].sort());
+  });
+
+  it('validates epic-scoped Gantt label settings', () => {
+    expectHttp(() => repo.upsertEpicSettings(db, 'NOPE', { [SETTING_KEYS.GANTT_APPLY_PARENT_LABELS]: true }), 404);
+    expectHttp(() => repo.upsertEpicSettings(db, 'CKT', { [SETTING_KEYS.GANTT_APPLY_PARENT_LABELS]: 'yes' }), 400);
+    expectHttp(() => repo.upsertEpicSettings(db, 'CKT', { [SETTING_KEYS.GANTT_IGNORE_LABELS]: 'Team' }), 400);
+    expectHttp(() => repo.upsertEpicSettings(db, 'CKT', { [SETTING_KEYS.ONCALL_MULTIPLIER]: 0.5 }), 400);
+  });
 });
 
 describe('team cadence', () => {

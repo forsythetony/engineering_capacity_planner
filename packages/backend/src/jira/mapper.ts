@@ -138,6 +138,24 @@ function latestSprintId(ids: string[], sprintsById: ReadonlyMap<string, Sprint>)
   return latest?.id ?? null;
 }
 
+function currentSprintId(
+  sprints: readonly Sprint[],
+  rawStateById: ReadonlyMap<string, JiraSprint['state']>,
+  placementDate: string,
+): string | null {
+  const active = sprints.find((s) => rawStateById.get(s.id) === 'active');
+  if (active) return active.id;
+  return sprints.find((s) => s.startDate <= placementDate && placementDate <= s.endDate)?.id ?? null;
+}
+
+function shouldPlaceInCurrentSprint(fields: JiraIssueFields): boolean {
+  const name = (fields.status?.name ?? '').trim();
+  if (/^to\s*do$/i.test(name)) return false;
+  if (/^won'?t\s*do$/i.test(name)) return false;
+  if (/^wont\s*do$/i.test(name)) return false;
+  return true;
+}
+
 /** Pick a reasonably-sized avatar URL from Jira's size-keyed map, or null. */
 export function pickAvatarUrl(user: Pick<JiraUser, 'avatarUrls'> | null | undefined): string | null {
   const urls = user?.avatarUrls;
@@ -174,6 +192,7 @@ export function datasetFromJira(input: JiraDatasetInput): DomainDataset {
   domainSprints.sort((a, b) => a.startDate.localeCompare(b.startDate));
   const domainSprintById = new Map(domainSprints.map((s) => [s.id, s]));
   const rawSprintStateById = new Map(sprints.map((s) => [String(s.id), s.state]));
+  const currentSprint = currentSprintId(domainSprints, rawSprintStateById, placementDate);
 
   const team = {
     id: teamId,
@@ -195,6 +214,7 @@ export function datasetFromJira(input: JiraDatasetInput): DomainDataset {
     key: s.key,
     epicKey: epic.key,
     title: s.fields.summary ?? s.key,
+    labels: labelsOf(s.fields, mapping),
   }));
   const storyKeys = new Set(stories.map((s) => s.key));
 
@@ -238,9 +258,10 @@ export function datasetFromJira(input: JiraDatasetInput): DomainDataset {
     });
     workItemKeys.add(issue.key);
 
-    if (mapping.sprintField && mapStatus(issue.fields) !== 'Done') {
-      const rawSprint = issue.fields[mapping.sprintField];
-      const sprintId = latestSprintId(sprintIdsOf(rawSprint), domainSprintById);
+    if (mapStatus(issue.fields) !== 'Done') {
+      const rawSprint = mapping.sprintField ? issue.fields[mapping.sprintField] : null;
+      const explicitSprintId = latestSprintId(sprintIdsOf(rawSprint), domainSprintById);
+      const sprintId = explicitSprintId ?? (shouldPlaceInCurrentSprint(issue.fields) ? currentSprint : null);
       const sprint = sprintId ? domainSprintById.get(sprintId) : null;
       if (sprint && sprintId) {
         placements.push({
@@ -249,7 +270,7 @@ export function datasetFromJira(input: JiraDatasetInput): DomainDataset {
           sprintId,
           weekIndex: weekIndexForSprint(
             sprint,
-            sprintStateOf(rawSprint, sprintId) ?? rawSprintStateById.get(sprintId) ?? null,
+            explicitSprintId ? sprintStateOf(rawSprint, sprintId) ?? rawSprintStateById.get(sprintId) ?? null : 'active',
             placementDate,
           ),
         });
@@ -258,7 +279,7 @@ export function datasetFromJira(input: JiraDatasetInput): DomainDataset {
   }
 
   if (usedUngrouped) {
-    stories.push({ key: UNGROUPED_KEY, epicKey: epic.key, title: 'Ungrouped' });
+    stories.push({ key: UNGROUPED_KEY, epicKey: epic.key, title: 'Ungrouped', labels: [] });
   }
 
   // --- Dependencies from "blocks" issue links ------------------------------

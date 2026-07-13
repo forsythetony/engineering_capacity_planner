@@ -9,12 +9,23 @@ import type { JiraIssue, JiraSprint } from '../jira/types.js';
 /** Anchor used only when no imported sprint carries a start date. */
 const DEFAULT_FALLBACK_ANCHOR = '2026-01-06';
 
+/** Label field ids requested for any issue layer that can feed Gantt lanes. */
+function labelFields(mapping: JiraMapping): string[] {
+  const fields = ['labels'];
+  if (mapping.labelsField !== 'labels') fields.push(mapping.labelsField);
+  return [...new Set(fields)];
+}
+
+/** Issue `fields` requested for the parent story layer. */
+function storyFields(mapping: JiraMapping): string[] {
+  return [...new Set(['summary', 'parent', ...labelFields(mapping)])];
+}
+
 /** Issue `fields` requested for the work-item layer. */
 function workItemFields(mapping: JiraMapping): string[] {
-  const fields = ['summary', 'status', 'assignee', 'parent', 'issuetype', 'issuelinks', 'labels'];
-  fields.push(mapping.storyPointsField);
+  const fields = ['summary', 'status', 'assignee', 'parent', 'issuetype', 'issuelinks'];
+  fields.push(mapping.storyPointsField, ...labelFields(mapping));
   if (mapping.sprintField) fields.push(mapping.sprintField);
-  if (mapping.labelsField !== 'labels') fields.push(mapping.labelsField);
   return [...new Set(fields)];
 }
 
@@ -82,7 +93,7 @@ export class JiraImporter implements Importer {
     const epicKey = await this.resolveEpicKey();
     const epicIssue = await this.client.getIssue(epicKey, ['summary']);
 
-    const storyIssues = await this.searchAll(`parent = "${epicKey}"`, ['summary', 'parent']);
+    const storyIssues = await this.searchAll(`parent = "${epicKey}"`, storyFields(this.mapping));
 
     let workIssues: JiraIssue[] = [];
     if (storyIssues.length > 0) {

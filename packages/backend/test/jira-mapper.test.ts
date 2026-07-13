@@ -48,7 +48,7 @@ describe('datasetFromJira', () => {
     );
 
     expect(ds.epics).toEqual([{ key: 'CKT-1', title: 'Checkout Revamp', teamId: 'team-jira-ckt' }]);
-    expect(ds.stories.map((s) => s.key)).toContain('CKT-2');
+    expect(ds.stories.find((s) => s.key === 'CKT-2')).toMatchObject({ labels: [] });
     expect(ds.workItems).toHaveLength(1);
     const wi = ds.workItems[0]!;
     expect(wi).toMatchObject({
@@ -61,6 +61,20 @@ describe('datasetFromJira', () => {
     });
     expect(ds.members).toEqual([
       { id: 'acc-1', teamId: 'team-jira-ckt', name: 'Ada', baseVelocity: 10, active: true, jiraAccountId: 'acc-1', avatarUrl: null },
+    ]);
+  });
+
+  it('maps labels from parent stories', () => {
+    const ds = datasetFromJira(
+      baseInput({
+        storyIssues: [
+          issue('CKT-2', { summary: 'Cart service', parent: { key: 'CKT-1' }, labels: ['Parent Lane'] }),
+        ],
+      }),
+    );
+
+    expect(ds.stories).toEqual([
+      { key: 'CKT-2', epicKey: 'CKT-1', title: 'Cart service', labels: ['Parent Lane'] },
     ]);
   });
 
@@ -175,6 +189,58 @@ describe('datasetFromJira', () => {
     expect(ds.placements).toEqual([
       { id: 'jira-CKT-7-sprint', workItemKey: 'CKT-7', sprintId: '54', weekIndex: 0 },
     ]);
+  });
+
+  it('places pulled/current work into the current sprint when Jira has no sprint assignment', () => {
+    const sprints: JiraSprint[] = [
+      { id: 54, name: 'Sprint 54', state: 'active', startDate: '2026-07-08T09:00:00.000+00:00', endDate: '2026-07-22T09:00:00.000+00:00' },
+      { id: 55, name: 'Sprint 55', state: 'future', startDate: '2026-07-22T09:00:00.000+00:00', endDate: '2026-08-05T09:00:00.000+00:00' },
+    ];
+    const ds = datasetFromJira(
+      baseInput({
+        sprints,
+        placementDate: '2026-07-16',
+        workIssues: [
+          issue('CKT-8', {
+            parent: { key: 'CKT-2' },
+            status: { name: 'In Progress', statusCategory: { key: 'indeterminate', name: 'In Progress' } },
+          }),
+          issue('CKT-9', {
+            parent: { key: 'CKT-2' },
+            status: { name: 'Pulled', statusCategory: { key: 'new', name: 'To Do' } },
+          }),
+        ],
+      }),
+    );
+
+    expect(ds.placements).toEqual([
+      { id: 'jira-CKT-8-sprint', workItemKey: 'CKT-8', sprintId: '54', weekIndex: 1 },
+      { id: 'jira-CKT-9-sprint', workItemKey: 'CKT-9', sprintId: '54', weekIndex: 1 },
+    ]);
+  });
+
+  it('does not auto-place To Do or Won’t Do work without a sprint assignment', () => {
+    const sprints: JiraSprint[] = [
+      { id: 54, name: 'Sprint 54', state: 'active', startDate: '2026-07-08T09:00:00.000+00:00', endDate: '2026-07-22T09:00:00.000+00:00' },
+    ];
+    const ds = datasetFromJira(
+      baseInput({
+        sprints,
+        placementDate: '2026-07-16',
+        workIssues: [
+          issue('CKT-8', {
+            parent: { key: 'CKT-2' },
+            status: { name: 'To Do', statusCategory: { key: 'new', name: 'To Do' } },
+          }),
+          issue('CKT-9', {
+            parent: { key: 'CKT-2' },
+            status: { name: "Won't Do", statusCategory: { key: 'done', name: 'Done' } },
+          }),
+        ],
+      }),
+    );
+
+    expect(ds.placements).toEqual([]);
   });
 
   it('falls back to the provided anchor when no sprint has dates', () => {

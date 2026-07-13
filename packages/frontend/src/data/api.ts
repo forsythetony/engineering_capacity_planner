@@ -40,6 +40,9 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 export const patchSettings = (patch: Record<string, unknown>): Promise<unknown> =>
   request('PATCH', '/api/settings', patch);
 
+export const patchEpicSettings = (epicKey: string, patch: Record<string, unknown>): Promise<unknown> =>
+  request('PATCH', `/api/epics/${encodeURIComponent(epicKey)}/settings`, patch);
+
 // --- Local DB snapshot + import --------------------------------------------
 export interface SnapshotResponse {
   /** Filename of the snapshot written next to the live database. */

@@ -133,6 +133,8 @@ export interface UserStory {
   key: string;
   epicKey: string;
   title: string;
+  /** Freeform labels/tags carried by the parent story. */
+  labels?: string[];
 }
 
 /** Lifecycle status of a work item. */

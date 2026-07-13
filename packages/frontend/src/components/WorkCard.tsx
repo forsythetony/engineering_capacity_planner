@@ -26,7 +26,7 @@ interface TipPos {
 
 /**
  * A draggable work-item card for the Gantt board: assignee avatar, key, and
- * points on top; the title truncated to one line below. The full title and
+ * points in a compact header; the title gets its own two-line body. The full title and
  * metadata surface in a clean custom tooltip on hover — positioned `fixed` off
  * the card's rect so the grid's overflow can't clip it.
  */

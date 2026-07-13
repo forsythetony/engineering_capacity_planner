@@ -42,7 +42,8 @@ export function writeDataset(db: Db, dataset: DomainDataset): void {
      VALUES (@id, @epicKey, @name, @date, @isGating)`,
   );
   const insertStory = db.prepare(
-    `INSERT INTO user_story (key, epic_key, title) VALUES (@key, @epicKey, @title)`,
+    `INSERT INTO user_story (key, epic_key, title, labels)
+     VALUES (@key, @epicKey, @title, @labels)`,
   );
   const insertSprint = db.prepare(
     `INSERT INTO sprint (id, team_id, name, start_date, end_date)
@@ -85,7 +86,7 @@ export function writeDataset(db: Db, dataset: DomainDataset): void {
     for (const sp of data.sprints) insertSprint.run(sp);
     for (const e of data.epics) insertEpic.run(e);
     for (const ms of data.milestones) insertMilestone.run({ ...ms, isGating: bool(ms.isGating) });
-    for (const s of data.stories) insertStory.run(s);
+    for (const s of data.stories) insertStory.run({ ...s, labels: JSON.stringify(s.labels ?? []) });
     for (const w of data.workItems) {
       insertWorkItem.run({ ...w, labels: JSON.stringify(w.labels ?? []) });
     }
@@ -173,7 +174,12 @@ export function readDataset(db: Db): DomainDataset {
     stories: db
       .prepare('SELECT * FROM user_story')
       .all()
-      .map((r: any) => ({ key: r.key, epicKey: r.epic_key, title: r.title })),
+      .map((r: any) => ({
+        key: r.key,
+        epicKey: r.epic_key,
+        title: r.title,
+        labels: r.labels ? JSON.parse(r.labels) : [],
+      })),
     workItems: db
       .prepare('SELECT * FROM work_item')
       .all()
