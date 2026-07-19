@@ -150,26 +150,43 @@ function withinLayerOrder(a: GraphNodeAnalysis, b: GraphNodeAnalysis): number {
   );
 }
 
+/** Optional view filters applied before layout. */
+export interface LayoutOptions {
+  /** Drop Done tickets (and edges touching them) so the view is remaining work. */
+  hideDone?: boolean;
+}
+
 /**
  * Build the positioned layout for the epic's dependency graph. When `focusKey`
  * names a work item, the layout is restricted to that ticket's connected
  * subtree (its blockers and everything it unblocks); otherwise the whole epic
- * is laid out.
+ * is laid out. `options.hideDone` drops completed tickets from the canvas.
  */
 export function buildGraphLayout(
   scope: EpicScope,
   scenario: Scenario,
   focusKey: string | null = null,
+  options: LayoutOptions = {},
 ): GraphLayout {
   const { nodeWidth, nodeHeight, colGap, rowGap, padding } = GRAPH_GEOMETRY;
 
   const hasFocus = focusKey !== null && scope.workItems.some((w) => w.key === focusKey);
   const keep = hasFocus ? subtreeKeys(scope.dependencies, focusKey!) : null;
 
-  const scopedItems = keep ? scope.workItems.filter((w) => keep.has(w.key)) : scope.workItems;
-  const scopedDeps = keep
+  const subtreeItems = keep ? scope.workItems.filter((w) => keep.has(w.key)) : scope.workItems;
+  const subtreeDeps = keep
     ? scope.dependencies.filter((d) => keep.has(d.blockerItemKey) && keep.has(d.blockedItemKey))
     : scope.dependencies;
+
+  // Optionally drop Done tickets: a finished ticket no longer blocks anything,
+  // so hiding it (and its edges) leaves a clean view of the work that remains.
+  const scopedItems = options.hideDone
+    ? subtreeItems.filter((w) => !nodeState(w, scenario).done)
+    : subtreeItems;
+  const visibleKeys = new Set(scopedItems.map((w) => w.key));
+  const scopedDeps = options.hideDone
+    ? subtreeDeps.filter((d) => visibleKeys.has(d.blockerItemKey) && visibleKeys.has(d.blockedItemKey))
+    : subtreeDeps;
 
   // Lift fully-unconnected tickets (no dependency in either direction) off the
   // canvas in the full view — they add boxes and rows but no structure. A

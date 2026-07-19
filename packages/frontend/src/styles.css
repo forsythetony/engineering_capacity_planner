@@ -1510,13 +1510,32 @@ button.tab:hover:not(.active) {
   padding: 8px 12px;
   margin-bottom: 12px;
 }
+.graph-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.graph-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.graph-toggle input {
+  cursor: pointer;
+}
 .graph-legend {
   display: flex;
   flex-wrap: wrap;
   gap: 16px;
   font-size: 12px;
   color: var(--muted);
-  margin-bottom: 12px;
 }
 .graph-legend .legend-item {
   display: inline-flex;
@@ -1615,6 +1634,15 @@ button.tab:hover:not(.active) {
 .edge-arrow {
   fill: var(--muted);
 }
+/* Hover-highlight: lift the hovered node's edges, mute the rest. */
+.dependency-edge.is-lit {
+  stroke: var(--accent);
+  stroke-width: 2.25;
+  opacity: 1;
+}
+.dependency-edge.is-dimmed {
+  opacity: 0.08;
+}
 
 /* Nodes */
 .graph-node {
@@ -1654,6 +1682,13 @@ button.tab:hover:not(.active) {
 }
 .graph-node.is-cut {
   opacity: 0.4;
+}
+.graph-node.is-dimmed {
+  opacity: 0.28;
+}
+.graph-node.is-lit .node-box {
+  stroke: var(--accent);
+  stroke-width: 2;
 }
 .graph-node .node-key {
   fill: var(--text);

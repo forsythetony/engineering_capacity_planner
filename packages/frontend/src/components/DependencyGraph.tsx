@@ -19,13 +19,34 @@ interface DependencyGraphProps {
 export function DependencyGraph({ scope, scenario }: DependencyGraphProps) {
   const [focusKey, setFocusKey] = useState<string | null>(null);
   const [showUnconnected, setShowUnconnected] = useState(false);
+  const [hideDone, setHideDone] = useState(false);
+  const [hoverKey, setHoverKey] = useState<string | null>(null);
   const layout = useMemo(
-    () => buildGraphLayout(scope, scenario, focusKey),
-    [scope, scenario, focusKey],
+    () => buildGraphLayout(scope, scenario, focusKey, { hideDone }),
+    [scope, scenario, focusKey, hideDone],
   );
   const { nodes, edges, width, height, analysis, unconnectedKeys } = layout;
 
   const toggleFocus = (key: string) => setFocusKey((prev) => (prev === key ? null : key));
+
+  // Undirected adjacency over the visible edges, so hovering a node can light up
+  // everything it directly touches (its blockers and what it blocks).
+  const neighbors = useMemo(() => {
+    const m = new Map<string, Set<string>>();
+    const link = (a: string, b: string) => {
+      let set = m.get(a);
+      if (!set) m.set(a, (set = new Set()));
+      set.add(b);
+    };
+    for (const e of edges) {
+      link(e.from, e.to);
+      link(e.to, e.from);
+    }
+    return m;
+  }, [edges]);
+
+  // The set to keep bright while hovering: the hovered node plus its neighbours.
+  const litKeys = hoverKey ? new Set([hoverKey, ...(neighbors.get(hoverKey) ?? [])]) : null;
 
   // The leaderboard is always ranked over the whole epic, not the focused view.
   const fullLeaderboard = useMemo(
@@ -85,12 +106,22 @@ export function DependencyGraph({ scope, scenario }: DependencyGraphProps) {
           </div>
         )}
 
-        <GraphLegend />
+        <div className="graph-toolbar">
+          <GraphLegend />
+          <label className="graph-toggle" data-testid="graph-hide-done">
+            <input
+              type="checkbox"
+              checked={hideDone}
+              onChange={(e) => setHideDone(e.target.checked)}
+            />
+            Hide Done
+          </label>
+        </div>
 
         {nodes.length > 0 ? (
           <div className="graph-scroll">
             <svg
-              className="dependency-svg"
+              className={`dependency-svg${hoverKey ? ' has-hover' : ''}`}
               width={width}
               height={height}
               viewBox={`0 0 ${width} ${height}`}
@@ -113,10 +144,20 @@ export function DependencyGraph({ scope, scenario }: DependencyGraphProps) {
               </defs>
 
               {edges.map((e) => (
-                <EdgePath key={e.id} edge={e} />
+                <EdgePath
+                  key={e.id}
+                  edge={e}
+                  lit={hoverKey ? e.from === hoverKey || e.to === hoverKey : null}
+                />
               ))}
               {nodes.map((n) => (
-                <GraphNode key={n.key} node={n} onFocus={toggleFocus} />
+                <GraphNode
+                  key={n.key}
+                  node={n}
+                  onFocus={toggleFocus}
+                  onHover={setHoverKey}
+                  lit={litKeys ? litKeys.has(n.key) : null}
+                />
               ))}
             </svg>
           </div>
@@ -210,26 +251,39 @@ function GraphLegend() {
 }
 
 /** A cubic Bézier from the blocker's right edge to the blocked node's left edge. */
-function EdgePath({ edge }: { edge: LayoutEdge }) {
+function EdgePath({ edge, lit }: { edge: LayoutEdge; lit: boolean | null }) {
   const dx = Math.max(28, (edge.x2 - edge.x1) / 2);
   const d = `M ${edge.x1} ${edge.y1} C ${edge.x1 + dx} ${edge.y1}, ${edge.x2 - dx} ${edge.y2}, ${edge.x2} ${edge.y2}`;
-  return (
-    <path
-      d={d}
-      className={`dependency-edge${edge.fromHighLeverage ? ' high-leverage' : ''}`}
-      markerEnd="url(#arrow)"
-      fill="none"
-    />
-  );
+  const className = [
+    'dependency-edge',
+    edge.fromHighLeverage ? 'high-leverage' : '',
+    lit === true ? 'is-lit' : '',
+    lit === false ? 'is-dimmed' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+  return <path d={d} className={className} markerEnd="url(#arrow)" fill="none" />;
 }
 
-function GraphNode({ node, onFocus }: { node: LayoutNode; onFocus: (key: string) => void }) {
+function GraphNode({
+  node,
+  onFocus,
+  onHover,
+  lit,
+}: {
+  node: LayoutNode;
+  onFocus: (key: string) => void;
+  onHover: (key: string | null) => void;
+  lit: boolean | null;
+}) {
   const className = [
     'graph-node',
     `tier-${node.tier}`,
     node.done ? 'is-done' : '',
     node.cut ? 'is-cut' : '',
     node.focused ? 'is-focused' : '',
+    lit === true ? 'is-lit' : '',
+    lit === false ? 'is-dimmed' : '',
   ]
     .filter(Boolean)
     .join(' ');
@@ -243,6 +297,8 @@ function GraphNode({ node, onFocus }: { node: LayoutNode; onFocus: (key: string)
       data-testid={`graph-node-${node.key}`}
       data-tier={node.tier}
       onClick={() => onFocus(node.key)}
+      onMouseEnter={() => onHover(node.key)}
+      onMouseLeave={() => onHover(null)}
     >
       <title>
         {node.key} — {node.title}

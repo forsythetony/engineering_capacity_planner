@@ -198,6 +198,32 @@ describe('buildGraphLayout — unconnected tickets', () => {
   });
 });
 
+describe('buildGraphLayout — hideDone option', () => {
+  it('drops Done tickets and any edges touching them', () => {
+    const doneKey = scope.workItems.find((w) => w.status === 'Done')?.key;
+    // The bundled fixture is expected to contain at least one Done ticket.
+    expect(doneKey).toBeDefined();
+
+    const shown = buildGraphLayout(scope, emptyScenario(), null, { hideDone: true });
+    const shownKeys = new Set([...shown.nodes.map((n) => n.key), ...shown.unconnectedKeys]);
+    expect(shownKeys.has(doneKey!)).toBe(false);
+    // No surviving node is Done, and no edge references a hidden ticket.
+    for (const n of shown.nodes) expect(n.done).toBe(false);
+    for (const e of shown.edges) {
+      expect(shownKeys.has(e.from)).toBe(true);
+      expect(shownKeys.has(e.to)).toBe(true);
+    }
+  });
+
+  it('also honours scenario-level done keys, not just Done status', () => {
+    const target = scope.workItems.find((w) => w.status !== 'Done')!.key;
+    const scenario = emptyScenario({ doneItemKeys: new Set([target]) });
+    const shown = buildGraphLayout(scope, scenario, null, { hideDone: true });
+    expect(shown.nodes.find((n) => n.key === target)).toBeUndefined();
+    expect(shown.unconnectedKeys).not.toContain(target);
+  });
+});
+
 describe('buildGraphLayout — empty epic', () => {
   it('returns an empty, zero-size layout', () => {
     const emptyDataset: DomainDataset = { ...dataset, workItems: [], dependencies: [] };
