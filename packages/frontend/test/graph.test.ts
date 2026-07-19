@@ -59,10 +59,27 @@ describe('nodeState', () => {
 describe('buildGraphLayout — over the bundled fixture', () => {
   const layout = buildGraphLayout(scope, emptyScenario());
 
-  it('lays out one node per work item', () => {
-    expect(layout.nodes).toHaveLength(scope.workItems.length);
-    const keys = new Set(layout.nodes.map((n) => n.key));
-    expect(keys.size).toBe(scope.workItems.length);
+  it('accounts for every work item as either a laid-out node or an unconnected key', () => {
+    const laidOut = new Set(layout.nodes.map((n) => n.key));
+    const unconnected = new Set(layout.unconnectedKeys);
+    // The two sets partition the epic: no overlap, and together they cover it.
+    for (const key of laidOut) expect(unconnected.has(key)).toBe(false);
+    expect(laidOut.size + unconnected.size).toBe(scope.workItems.length);
+    expect(new Set([...laidOut, ...unconnected]).size).toBe(scope.workItems.length);
+  });
+
+  it('lays out exactly the tickets that participate in a dependency', () => {
+    const connected = new Set<string>();
+    for (const d of scope.dependencies) {
+      connected.add(d.blockerItemKey);
+      connected.add(d.blockedItemKey);
+    }
+    expect(new Set(layout.nodes.map((n) => n.key))).toEqual(connected);
+    // Unconnected keys are exactly the rest, and none appear in any edge.
+    for (const key of layout.unconnectedKeys) expect(connected.has(key)).toBe(false);
+    expect(layout.unconnectedKeys).toEqual([...layout.unconnectedKeys].sort((a, b) =>
+      a.localeCompare(b, undefined, { numeric: true }),
+    ));
   });
 
   it('emits an edge per in-epic dependency', () => {
@@ -153,6 +170,31 @@ describe('buildGraphLayout — focus mode', () => {
     const bogus = buildGraphLayout(scope, emptyScenario(), 'NOPE-999');
     expect(bogus.nodes).toHaveLength(full.nodes.length);
     expect(bogus.focusKey).toBeNull();
+  });
+});
+
+describe('buildGraphLayout — unconnected tickets', () => {
+  it('lifts a ticket with no dependencies off the canvas into unconnectedKeys', () => {
+    const storyKey = scope.stories[0]!.key;
+    const loner: WorkItem = {
+      key: 'LONER-1',
+      storyKey,
+      title: 'Standalone chore',
+      points: 2,
+      status: 'To Do',
+      assigneeId: null,
+    };
+    const withLoner: DomainDataset = { ...dataset, workItems: [...dataset.workItems, loner] };
+    const layout = buildGraphLayout(scopeEpic(withLoner, epicKey), emptyScenario());
+
+    expect(layout.unconnectedKeys).toContain('LONER-1');
+    expect(layout.nodes.find((n) => n.key === 'LONER-1')).toBeUndefined();
+  });
+
+  it('does not collapse anything in focus mode (a subtree is already connected)', () => {
+    const top = buildGraphLayout(scope, emptyScenario()).analysis.leaderboard[0]!;
+    const focused = buildGraphLayout(scope, emptyScenario(), top.key);
+    expect(focused.unconnectedKeys).toEqual([]);
   });
 });
 

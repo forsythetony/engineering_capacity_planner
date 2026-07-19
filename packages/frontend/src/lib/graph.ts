@@ -62,6 +62,14 @@ export interface GraphLayout {
   analysis: GraphAnalysis;
   /** The node the graph is focused on, or `null` when showing everything. */
   focusKey: string | null;
+  /**
+   * Work items with no dependency in either direction, lifted off the canvas so
+   * the flowchart only shows tickets that actually block or are blocked. The
+   * component collapses these into a footer the user can expand. Empty in focus
+   * mode (a focused subtree is dependency-connected by construction). Sorted by
+   * key (numeric-aware).
+   */
+  unconnectedKeys: string[];
 }
 
 /**
@@ -102,7 +110,7 @@ export function subtreeKeys(
 
 /** Box + spacing geometry. Exported so tests can assert exact coordinates. */
 export const GRAPH_GEOMETRY = {
-  nodeWidth: 168,
+  nodeWidth: 208,
   nodeHeight: 52,
   colGap: 72,
   rowGap: 18,
@@ -163,8 +171,26 @@ export function buildGraphLayout(
     ? scope.dependencies.filter((d) => keep.has(d.blockerItemKey) && keep.has(d.blockedItemKey))
     : scope.dependencies;
 
-  const items = new Map(scopedItems.map((w) => [w.key, w]));
-  const keys = scopedItems.map((w) => w.key);
+  // Lift fully-unconnected tickets (no dependency in either direction) off the
+  // canvas in the full view — they add boxes and rows but no structure. A
+  // focused subtree is already dependency-connected, so we keep it whole there.
+  const connectedKeys = new Set<string>();
+  for (const d of scopedDeps) {
+    connectedKeys.add(d.blockerItemKey);
+    connectedKeys.add(d.blockedItemKey);
+  }
+  const laidOutItems = hasFocus
+    ? scopedItems
+    : scopedItems.filter((w) => connectedKeys.has(w.key));
+  const unconnectedKeys = hasFocus
+    ? []
+    : scopedItems
+        .filter((w) => !connectedKeys.has(w.key))
+        .map((w) => w.key)
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+  const items = new Map(laidOutItems.map((w) => [w.key, w]));
+  const keys = laidOutItems.map((w) => w.key);
   const edges = scopedDeps.map((d) => ({
     blocker: d.blockerItemKey,
     blocked: d.blockedItemKey,
@@ -225,5 +251,13 @@ export function buildGraphLayout(
   const width = analysis.layerCount === 0 ? 0 : padding * 2 + analysis.layerCount * nodeWidth + (analysis.layerCount - 1) * colGap;
   const height = rows === 0 ? 0 : padding * 2 + rows * nodeHeight + (rows - 1) * rowGap;
 
-  return { nodes, edges: edgesOut, width, height, analysis, focusKey: hasFocus ? focusKey : null };
+  return {
+    nodes,
+    edges: edgesOut,
+    width,
+    height,
+    analysis,
+    focusKey: hasFocus ? focusKey : null,
+    unconnectedKeys,
+  };
 }

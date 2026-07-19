@@ -1555,14 +1555,62 @@ button.tab:hover:not(.active) {
   display: block;
 }
 
+/* Collapsed "unconnected tickets" footer */
+.graph-unconnected {
+  margin-top: 12px;
+}
+.graph-unconnected-toggle {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.graph-unconnected-toggle:hover {
+  border-color: var(--accent);
+}
+.graph-unconnected-grid {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 6px;
+}
+.graph-unconnected-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+  font-size: 13px;
+  min-width: 0;
+}
+.graph-unconnected-title {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Edges */
 .dependency-edge {
   stroke: var(--border);
   stroke-width: 1.5;
+  opacity: 0.55;
 }
 .dependency-edge.high-leverage {
   stroke: color-mix(in srgb, var(--accent) 70%, var(--border));
   stroke-width: 2;
+  opacity: 0.85;
 }
 .edge-arrow {
   fill: var(--muted);

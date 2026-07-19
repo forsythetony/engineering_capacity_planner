@@ -18,11 +18,12 @@ interface DependencyGraphProps {
  */
 export function DependencyGraph({ scope, scenario }: DependencyGraphProps) {
   const [focusKey, setFocusKey] = useState<string | null>(null);
+  const [showUnconnected, setShowUnconnected] = useState(false);
   const layout = useMemo(
     () => buildGraphLayout(scope, scenario, focusKey),
     [scope, scenario, focusKey],
   );
-  const { nodes, edges, width, height, analysis } = layout;
+  const { nodes, edges, width, height, analysis, unconnectedKeys } = layout;
 
   const toggleFocus = (key: string) => setFocusKey((prev) => (prev === key ? null : key));
 
@@ -86,38 +87,71 @@ export function DependencyGraph({ scope, scenario }: DependencyGraphProps) {
 
         <GraphLegend />
 
-        <div className="graph-scroll">
-          <svg
-            className="dependency-svg"
-            width={width}
-            height={height}
-            viewBox={`0 0 ${width} ${height}`}
-            role="img"
-            aria-label="Ticket dependency graph"
-            data-testid="dependency-svg"
-          >
-            <defs>
-              <marker
-                id="arrow"
-                viewBox="0 0 10 10"
-                refX="9"
-                refY="5"
-                markerWidth="7"
-                markerHeight="7"
-                orient="auto-start-reverse"
-              >
-                <path d="M0,0 L10,5 L0,10 z" className="edge-arrow" />
-              </marker>
-            </defs>
+        {nodes.length > 0 ? (
+          <div className="graph-scroll">
+            <svg
+              className="dependency-svg"
+              width={width}
+              height={height}
+              viewBox={`0 0 ${width} ${height}`}
+              role="img"
+              aria-label="Ticket dependency graph"
+              data-testid="dependency-svg"
+            >
+              <defs>
+                <marker
+                  id="arrow"
+                  viewBox="0 0 10 10"
+                  refX="9"
+                  refY="5"
+                  markerWidth="7"
+                  markerHeight="7"
+                  orient="auto-start-reverse"
+                >
+                  <path d="M0,0 L10,5 L0,10 z" className="edge-arrow" />
+                </marker>
+              </defs>
 
-            {edges.map((e) => (
-              <EdgePath key={e.id} edge={e} />
-            ))}
-            {nodes.map((n) => (
-              <GraphNode key={n.key} node={n} onFocus={toggleFocus} />
-            ))}
-          </svg>
-        </div>
+              {edges.map((e) => (
+                <EdgePath key={e.id} edge={e} />
+              ))}
+              {nodes.map((n) => (
+                <GraphNode key={n.key} node={n} onFocus={toggleFocus} />
+              ))}
+            </svg>
+          </div>
+        ) : (
+          <p className="hint" data-testid="graph-empty-canvas">
+            No dependencies between this epic’s tickets — nothing to chart. Every ticket is listed
+            below.
+          </p>
+        )}
+
+        {unconnectedKeys.length > 0 && (
+          <div className="graph-unconnected" data-testid="graph-unconnected">
+            <button
+              type="button"
+              className="graph-unconnected-toggle"
+              aria-expanded={showUnconnected}
+              data-testid="graph-unconnected-toggle"
+              onClick={() => setShowUnconnected((prev) => !prev)}
+            >
+              {showUnconnected ? '▾' : '▸'} {unconnectedKeys.length} unconnected ticket
+              {unconnectedKeys.length === 1 ? '' : 's'}
+              <span className="hint"> — no blockers, block nothing</span>
+            </button>
+            {showUnconnected && (
+              <ul className="graph-unconnected-grid" data-testid="graph-unconnected-grid">
+                {unconnectedKeys.map((key) => (
+                  <li key={key} className="graph-unconnected-item">
+                    <JiraKeyLink jiraKey={key} />
+                    <span className="graph-unconnected-title">{titleByKey.get(key)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="panel">
@@ -224,7 +258,7 @@ function GraphNode({ node, onFocus }: { node: LayoutNode; onFocus: (key: string)
         {node.done ? ' ✓' : ''}
       </text>
       <text x={10} y={39} className="node-title">
-        {truncate(node.title, 17)}
+        {truncate(node.title, 24)}
       </text>
       <text x={node.width - 10} y={39} className="node-metrics" textAnchor="end">
         {metrics}
