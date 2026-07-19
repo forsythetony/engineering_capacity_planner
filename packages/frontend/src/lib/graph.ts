@@ -25,8 +25,6 @@ export interface LayoutNode {
   points: number;
   status: WorkItem['status'];
   layer: number;
-  /** Row within the layer (0 at top). */
-  row: number;
   x: number;
   y: number;
   width: number;
@@ -49,17 +47,11 @@ export interface LayoutEdge {
   id: string;
   from: string;
   to: string;
-  /** Blocker's right-edge midpoint. */
-  x1: number;
-  y1: number;
-  /** Blocked's left-edge midpoint. */
-  x2: number;
-  y2: number;
   /**
-   * The full routed polyline from `x1,y1` to `x2,y2`. For an edge spanning more
-   * than one layer it bends through a waypoint in each intermediate column so it
-   * routes around node boxes instead of slicing across them; a single-layer edge
-   * is just the two endpoints. Always includes both endpoints.
+   * The routed polyline from the blocker's right edge to the blocked node's left
+   * edge. For an edge spanning more than one layer it bends through a waypoint in
+   * each intermediate column so it routes around node boxes instead of slicing
+   * across them; a single-layer edge is just the two endpoints.
    */
   points: Point[];
   /** True when the source is a high-leverage node (edges drawn emphasized). */
@@ -74,6 +66,12 @@ export interface GraphLayout {
   analysis: GraphAnalysis;
   /** The node the graph is focused on, or `null` when showing everything. */
   focusKey: string | null;
+  /**
+   * Total connected tickets in the (hide-Done-filtered) graph — i.e. how many
+   * nodes the full view would show. When `options.limit` trims the layout to the
+   * top blockers, `nodes.length` is the shown count and this is the "of N".
+   */
+  totalConnected: number;
   /**
    * Work items with no dependency in either direction, lifted off the canvas so
    * the flowchart only shows tickets that actually block or are blocked. The
@@ -168,6 +166,12 @@ function withinLayerOrder(a: GraphNodeAnalysis, b: GraphNodeAnalysis): number {
 export interface LayoutOptions {
   /** Drop Done tickets (and edges touching them) so the view is remaining work. */
   hideDone?: boolean;
+  /**
+   * Lay out only the top-N connected tickets by leverage (highest-value blockers
+   * first) for a compact preview. Node metrics/tiers stay global; ignored in
+   * focus mode. Omit to lay out the whole connected graph.
+   */
+  limit?: number;
 }
 
 /** A real node or a routing dummy occupying a slot in some column. */
@@ -196,7 +200,6 @@ interface ColumnLayout {
   edgeChains: EdgeChain[];
   centerY: Map<string, number>;
   topY: Map<string, number>;
-  rowOf: Map<string, number>;
 }
 
 /**
@@ -297,7 +300,6 @@ function layoutColumns(
   // lanes short), stacking top-to-bottom with a uniform gap.
   const centerY = new Map<string, number>();
   const topY = new Map<string, number>();
-  const rowOf = new Map<string, number>();
   for (let L = 0; L < layerCount; L++) {
     let cursor = padding;
     layers[L]!.forEach((id, row) => {
@@ -305,12 +307,11 @@ function layoutColumns(
       if (row > 0) cursor += rowGap;
       topY.set(id, cursor);
       centerY.set(id, cursor + h / 2);
-      rowOf.set(id, row);
       cursor += h;
     });
   }
 
-  return { orderedLayers: layers, slots, edgeChains, centerY, topY, rowOf };
+  return { orderedLayers: layers, slots, edgeChains, centerY, topY };
 }
 
 /**
@@ -363,46 +364,65 @@ export function buildGraphLayout(
         .map((w) => w.key)
         .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
-  const items = new Map(laidOutItems.map((w) => [w.key, w]));
-  const keys = laidOutItems.map((w) => w.key);
-  const edges = scopedDeps.map((d) => ({
+  // Leverage/cycle/leaderboard are global properties, so analyse the whole
+  // connected graph first — even when we only lay out the top-N below, node
+  // badges and tiers should reflect what each ticket blocks across the epic.
+  const connectedKeysList = laidOutItems.map((w) => w.key);
+  const connectedEdges = scopedDeps.map((d) => ({
     blocker: d.blockerItemKey,
     blocked: d.blockedItemKey,
   }));
-  const analysis = analyzeGraph(keys, edges);
+  const analysis = analyzeGraph(connectedKeysList, connectedEdges);
+  const globalByKey = new Map(analysis.nodes.map((n) => [n.key, n] as const));
+  const totalConnected = laidOutItems.length;
+
+  // Compact preview: keep only the top-N blockers by leverage (leaderboard is
+  // already leverage-ranked) and re-layer just those, with edges among them.
+  const trimmed = options.limit != null && !hasFocus && totalConnected > options.limit;
+  const visible = trimmed
+    ? new Set(analysis.leaderboard.slice(0, options.limit).map((n) => n.key))
+    : null;
+  const layoutItems = visible ? laidOutItems.filter((w) => visible.has(w.key)) : laidOutItems;
+  const items = new Map(layoutItems.map((w) => [w.key, w]));
+  const layoutAnalysis = visible
+    ? analyzeGraph(
+        layoutItems.map((w) => w.key),
+        connectedEdges.filter((e) => visible.has(e.blocker) && visible.has(e.blocked)),
+      )
+    : analysis;
 
   // ── Sugiyama-style ordering with dummy waypoints ────────────────────────
-  // The engine already layered nodes by longest blocker chain. Here we (1) drop
-  // a dummy slot into every column an edge crosses, (2) order each column to
-  // reduce edge crossings (seeded by leverage so important tickets start high),
-  // and (3) route each edge through its dummies so long edges bend around node
-  // boxes instead of slicing through them.
-  const layerCount = analysis.layerCount;
-  const layerOf = new Map(analysis.nodes.map((n) => [n.key, n.layer] as const));
+  // The engine layered nodes by longest blocker chain. Here we (1) drop a dummy
+  // slot into every column an edge crosses, (2) order each column to reduce edge
+  // crossings (seeded by leverage so important tickets start high), and (3) route
+  // each edge through its dummies so long edges bend around node boxes.
+  const layerCount = layoutAnalysis.layerCount;
+  const layerOf = new Map(layoutAnalysis.nodes.map((n) => [n.key, n.layer] as const));
 
-  const layered = layoutColumns(analysis, layerOf, dummyLaneHeight, nodeHeight, rowGap, padding);
-  const { orderedLayers, slots, centerY, topY, rowOf } = layered;
+  const layered = layoutColumns(layoutAnalysis, layerOf, dummyLaneHeight, nodeHeight, rowGap, padding);
+  const { orderedLayers, slots, centerY, topY } = layered;
 
   const columnX = (layer: number) => padding + layer * (nodeWidth + colGap);
 
   const nodes: LayoutNode[] = [];
   const boxByKey = new Map<string, LayoutNode>();
-  for (const node of analysis.nodes) {
+  for (const node of layoutAnalysis.nodes) {
     const item = items.get(node.key)!;
+    // Position from the (possibly trimmed) layout; leverage metrics from global.
+    const g = globalByKey.get(node.key) ?? node;
     const layout: LayoutNode = {
       key: node.key,
       title: item.title,
       points: item.points,
       status: item.status,
       layer: node.layer,
-      row: rowOf.get(node.key) ?? 0,
       x: columnX(node.layer),
       y: topY.get(node.key)!,
       width: nodeWidth,
       height: nodeHeight,
-      directDependents: node.directDependents,
-      transitiveDependents: node.transitiveDependents,
-      tier: leverageTier(node.transitiveDependents),
+      directDependents: g.directDependents,
+      transitiveDependents: g.transitiveDependents,
+      tier: leverageTier(g.transitiveDependents),
       focused: hasFocus && node.key === focusKey,
       ...nodeState(item, scenario),
     };
@@ -424,10 +444,6 @@ export function buildGraphLayout(
       id,
       from,
       to,
-      x1: start.x,
-      y1: start.y,
-      x2: end.x,
-      y2: end.y,
       points: [start, ...mid, end],
       fromHighLeverage: fromBox.tier === 'high',
     };
@@ -449,6 +465,7 @@ export function buildGraphLayout(
     height,
     analysis,
     focusKey: hasFocus ? focusKey : null,
+    totalConnected,
     unconnectedKeys,
   };
 }

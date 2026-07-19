@@ -48,13 +48,14 @@ function scopeWith(workItems: WorkItem[], dependencies: Dependency[]): EpicScope
 
 /** Count crossings among straight (single-layer) edges by endpoint order. */
 function countCrossings(edges: readonly LayoutEdge[]): number {
+  const ends = (e: LayoutEdge) => ({ start: e.points[0]!, end: e.points[e.points.length - 1]! });
   let crossings = 0;
   for (let i = 0; i < edges.length; i++) {
     for (let j = i + 1; j < edges.length; j++) {
-      const a = edges[i]!;
-      const b = edges[j]!;
-      if (a.x1 !== b.x1 || a.x2 !== b.x2) continue; // only same-span edges
-      if (Math.sign(a.y1 - b.y1) * Math.sign(a.y2 - b.y2) < 0) crossings++;
+      const a = ends(edges[i]!);
+      const b = ends(edges[j]!);
+      if (a.start.x !== b.start.x || a.end.x !== b.end.x) continue; // same-span only
+      if (Math.sign(a.start.y - b.start.y) * Math.sign(a.end.y - b.end.y) < 0) crossings++;
     }
   }
   return crossings;
@@ -306,6 +307,42 @@ describe('buildGraphLayout — crossing reduction (phase 3)', () => {
       emptyScenario(),
     );
     expect(countCrossings(layout.edges)).toBe(0);
+  });
+});
+
+describe('buildGraphLayout — preview limit (phase 4)', () => {
+  const full = buildGraphLayout(scope, emptyScenario());
+
+  it('trims to the top-N blockers by leverage and reports the total', () => {
+    const preview = buildGraphLayout(scope, emptyScenario(), null, { limit: 5 });
+
+    expect(full.nodes.length).toBeGreaterThan(5); // fixture is big enough to trim
+    expect(preview.totalConnected).toBe(full.nodes.length);
+    expect(preview.nodes).toHaveLength(5);
+
+    // The shown nodes are exactly the top-5 of the global leaderboard.
+    const top5 = new Set(full.analysis.leaderboard.slice(0, 5).map((n) => n.key));
+    expect(new Set(preview.nodes.map((n) => n.key))).toEqual(top5);
+
+    // Global leverage metrics survive the trim (not recomputed on the subset).
+    const topKey = full.analysis.leaderboard[0]!.key;
+    expect(preview.nodes.find((n) => n.key === topKey)!.transitiveDependents).toBe(
+      full.nodes.find((n) => n.key === topKey)!.transitiveDependents,
+    );
+    // analysis stays global, so the leaderboard is the whole epic's.
+    expect(preview.analysis.leaderboard.length).toBe(full.analysis.leaderboard.length);
+  });
+
+  it('is a no-op when the graph already fits within the limit', () => {
+    const preview = buildGraphLayout(scope, emptyScenario(), null, { limit: 9999 });
+    expect(preview.nodes.length).toBe(full.nodes.length);
+    expect(preview.totalConnected).toBe(full.nodes.length);
+  });
+
+  it('ignores the limit in focus mode (the subtree is shown whole)', () => {
+    const top = full.analysis.leaderboard[0]!;
+    const focused = buildGraphLayout(scope, emptyScenario(), top.key, { limit: 1 });
+    expect(new Set(focused.nodes.map((n) => n.key))).toEqual(subtreeKeys(scope.dependencies, top.key));
   });
 });
 

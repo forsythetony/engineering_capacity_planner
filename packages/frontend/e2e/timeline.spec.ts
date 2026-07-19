@@ -102,19 +102,19 @@ test.describe('Calendar / timeline tab', () => {
 });
 
 test.describe('Dependencies tab', () => {
-  test('renders the graph, highlights high-leverage blockers, and ranks them', async ({ page }) => {
+  test('previews the top blockers and ranks them', async ({ page }) => {
     await page.goto('/');
 
     await page.getByTestId('tab-dependencies').click();
 
-    // The flowchart renders with a node per ticket and at least one edge.
+    // The inline preview renders a trimmed flowchart with at least one edge.
     const svg = page.getByTestId('dependency-svg');
     await expect(svg).toBeVisible();
     await expect(svg.locator('.graph-node')).not.toHaveCount(0);
-    await expect(svg.locator('.dependency-edge').first()).toBeVisible();
-
-    // At least one node is flagged as high leverage.
+    await expect(svg.locator('.dependency-edge')).not.toHaveCount(0);
+    // A high-leverage blocker is present, and the count callout is shown.
     await expect(svg.locator('.graph-node[data-tier="high"]').first()).toBeVisible();
+    await expect(page.getByTestId('graph-preview-count')).toContainText('highest-leverage');
 
     // The "work these next" leaderboard lists the top blockers.
     const list = page.getByTestId('leverage-list');
@@ -126,27 +126,41 @@ test.describe('Dependencies tab', () => {
     await expect(page.getByTestId('timeline')).toBeVisible();
   });
 
-  test('clicking a leaderboard entry focuses the graph on that subtree', async ({ page }) => {
+  test('"Show all" opens the full-graph modal with more tickets than the preview', async ({ page }) => {
     await page.goto('/');
     await page.getByTestId('tab-dependencies').click();
 
-    const svg = page.getByTestId('dependency-svg');
-    const before = await svg.locator('.graph-node').count();
+    const previewCount = await page.getByTestId('dependency-svg').locator('.graph-node').count();
 
-    // Focus the top blocker via the leaderboard.
+    await page.getByTestId('graph-open-full').click();
+    const modal = page.getByTestId('graph-modal');
+    await expect(modal).toBeVisible();
+
+    // The modal's full graph shows more nodes than the trimmed preview.
+    const modalSvg = modal.getByTestId('dependency-svg');
+    await expect(modalSvg.locator('.graph-node').first()).toBeVisible();
+    expect(await modalSvg.locator('.graph-node').count()).toBeGreaterThan(previewCount);
+
+    // Closing dismisses the overlay.
+    await page.getByTestId('graph-modal-close').click();
+    await expect(modal).toBeHidden();
+  });
+
+  test('a leaderboard entry opens the modal focused on that subtree', async ({ page }) => {
+    await page.goto('/');
+    await page.getByTestId('tab-dependencies').click();
+
     await page.getByTestId('leverage-list').locator('.leverage-row').first().click();
 
-    const banner = page.getByTestId('graph-focus-banner');
-    await expect(banner).toBeVisible();
-    // The focused view shows a strict subset of the full graph.
-    await expect(svg.locator('.graph-node.is-focused')).toHaveCount(1);
-    const after = await svg.locator('.graph-node').count();
-    expect(after).toBeLessThan(before);
+    const modal = page.getByTestId('graph-modal');
+    await expect(modal).toBeVisible();
+    await expect(page.getByTestId('graph-focus-banner')).toBeVisible();
+    await expect(modal.locator('.graph-node.is-focused')).toHaveCount(1);
 
-    // "Show all" restores the full graph.
+    // "Show whole graph" clears the focus but keeps the modal open.
     await page.getByTestId('graph-show-all').click();
-    await expect(banner).toBeHidden();
-    await expect(svg.locator('.graph-node')).toHaveCount(before);
+    await expect(page.getByTestId('graph-focus-banner')).toBeHidden();
+    await expect(modal).toBeVisible();
   });
 });
 
