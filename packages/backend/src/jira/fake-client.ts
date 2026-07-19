@@ -145,6 +145,28 @@ export class FakeJiraClient implements JiraClient {
     this.sprintsByBoard.set(boardId, sprints);
   }
 
+  /**
+   * Insert a fully-formed issue (e.g. from an obfuscated sync fixture) under
+   * its existing key/id, without going through `createIssue` numbering.
+   */
+  seedIssue(issue: JiraIssue): void {
+    const clone: JiraIssue = {
+      id: issue.id,
+      key: issue.key,
+      fields: { ...issue.fields, issuelinks: [...(issue.fields.issuelinks ?? [])] },
+    };
+    const assignee = clone.fields.assignee as JiraUser | null | undefined;
+    if (assignee?.accountId) clone.fields.assignee = withDemoAvatar(assignee);
+    this.issues.set(clone.key, clone);
+    const n = Number(clone.key.slice(clone.key.lastIndexOf('-') + 1));
+    if (Number.isFinite(n)) {
+      const projectKey = this.projectKeyOf(clone.key);
+      this.counters.set(projectKey, Math.max(this.counters.get(projectKey) ?? 0, n));
+    }
+    const idNum = Number(clone.id);
+    if (Number.isFinite(idNum) && idNum >= this.nextId) this.nextId = idNum + 1;
+  }
+
   /** All stored issues (unprojected), for assertions. */
   allIssues(): JiraIssue[] {
     return [...this.issues.values()];

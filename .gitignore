@@ -8,6 +8,8 @@ dist/
 # SQLite databases (generated, not source of truth in the repo).
 # Note: only match the DB files themselves — a bare `data/` rule would also
 # swallow source dirs like packages/frontend/src/data.
+# Also covers `./data/cache/` (raw Jira sync dumps — never commit; use
+# `npm run export:obfuscated` to produce a shareable anonymized fixture).
 *.db
 *.db-shm
 *.db-wal

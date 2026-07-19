@@ -271,6 +271,23 @@ present and unfinished keeps its placement.
 
 ---
 
+## Sync cache & shareable fixtures
+
+Every successful Sync also writes the raw Jira payload to
+`./data/cache/jira-last-sync.json` (gitignored — do not commit). To share
+realistic board topology with collaborators without leaking titles or people:
+
+```bash
+npm run export:obfuscated
+# → packages/backend/testdata/obfuscated-jira.json
+```
+
+Labels, statuses, points, and dependency structure are kept; summaries, people,
+emails, avatars, and project keys are anonymized. Tests can hydrate
+`FakeJiraClient` from that file via `fakeClientFromFixture`.
+
+---
+
 ## Ongoing use
 
 - **Re-sync freely.** It's idempotent with respect to your intent — placements,

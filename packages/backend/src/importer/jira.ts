@@ -4,6 +4,11 @@ import type { JiraClient } from '../jira/client.js';
 import { datasetFromJira } from '../jira/mapper.js';
 import type { JiraMapping } from '../jira/mapping.js';
 import { MappingError } from '../jira/mapping.js';
+import {
+  JIRA_SYNC_CACHE_VERSION,
+  writeSyncCache,
+  type JiraSyncCache,
+} from '../jira/sync-cache.js';
 import type { JiraIssue, JiraSprint } from '../jira/types.js';
 
 /** Anchor used only when no imported sprint carries a start date. */
@@ -39,17 +44,23 @@ function workItemFields(mapping: JiraMapping): string[] {
  * the pure {@link datasetFromJira} mapper. Hierarchy is read by **parent-chain
  * depth** (epic → children = stories → their children = work items) rather than
  * by issue-type names, so it works across team- and company-managed projects.
+ *
+ * After a successful fetch it optionally dumps the raw payload to a local
+ * sync-cache file (gitignored under `./data/cache/`) for offline replay and
+ * obfuscated fixture export.
  */
 export class JiraImporter implements Importer {
   readonly name = 'jira';
   private readonly fallbackAnchorDate: string;
+  private readonly cachePath: string | null;
 
   constructor(
     private readonly client: JiraClient,
     private readonly mapping: JiraMapping,
-    options: { fallbackAnchorDate?: string } = {},
+    options: { fallbackAnchorDate?: string; cachePath?: string | null } = {},
   ) {
     this.fallbackAnchorDate = options.fallbackAnchorDate ?? DEFAULT_FALLBACK_ANCHOR;
+    this.cachePath = options.cachePath ?? null;
   }
 
   /** Follow `nextPageToken` until the last page, collecting every issue. */
@@ -89,6 +100,26 @@ export class JiraImporter implements Importer {
     return this.client.listSprints(boardId);
   }
 
+  /** Write the raw fetch payload beside the DB for later obfuscated export. */
+  private persistCache(
+    epicIssue: JiraIssue,
+    storyIssues: JiraIssue[],
+    workIssues: JiraIssue[],
+    sprints: JiraSprint[],
+  ): void {
+    if (!this.cachePath) return;
+    const cache: JiraSyncCache = {
+      version: JIRA_SYNC_CACHE_VERSION,
+      cachedAt: new Date().toISOString(),
+      mapping: this.mapping,
+      epicIssue,
+      storyIssues,
+      workIssues,
+      sprints,
+    };
+    writeSyncCache(this.cachePath, cache);
+  }
+
   async fetch(): Promise<DomainDataset> {
     const epicKey = await this.resolveEpicKey();
     const epicIssue = await this.client.getIssue(epicKey, ['summary']);
@@ -102,6 +133,7 @@ export class JiraImporter implements Importer {
     }
 
     const sprints = await this.fetchSprints();
+    this.persistCache(epicIssue, storyIssues, workIssues, sprints);
 
     return datasetFromJira({
       epicIssue,

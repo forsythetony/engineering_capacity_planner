@@ -3,6 +3,7 @@ import type { AppConfig, JiraConfig } from '../config.js';
 import type { JiraClient } from '../jira/client.js';
 import { HttpJiraClient } from '../jira/http-client.js';
 import { resolveMapping } from '../jira/mapping.js';
+import { defaultSyncCachePath } from '../jira/sync-cache.js';
 import { JiraImporter } from './jira.js';
 import { SyntheticImporter } from './synthetic.js';
 
@@ -36,7 +37,11 @@ export function createImporter(
       return new SyntheticImporter({ seed: config.syntheticSeed });
     case 'jira': {
       const client = buildJiraClient(config.jira, clientOverride);
-      return new JiraImporter(client, resolveMapping(settings, config.jira));
+      return new JiraImporter(client, resolveMapping(settings, config.jira), {
+        // Dump raw Jira responses beside the DB (gitignored) so
+        // `export:obfuscated` can turn a real sync into shareable test data.
+        cachePath: defaultSyncCachePath(config.dbPath),
+      });
     }
   }
 }

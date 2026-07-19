@@ -114,11 +114,31 @@ database directly (Phase 1 is verifiable via DB inspection):
 ```bash
 npm run seed:local             # → ./data/ecp.db
 npm run export:fixture         # regenerate the frontend's bundled fallback dataset
+npm run export:obfuscated      # anonymize the last Jira sync cache → testdata/
 
 # Parameterized runs (different seed / size / path) pass flags to the script,
 # so invoke it from the backend workspace where `--` forwards cleanly:
 npm run seed:local -w @ecp/backend -- --seed 7 --items 60
 ```
+
+### Sync cache & shareable Jira fixtures
+
+Every successful Jira sync dumps the raw epic/story/work/sprint payloads next to
+the SQLite DB (typically `packages/backend/data/cache/jira-last-sync.json` when
+the backend is started via the workspace script; gitignored — never commit this).
+To share realistic structure with collaborators without leaking titles or people:
+
+```bash
+# After syncing against your board:
+npm run export:obfuscated
+# → packages/backend/testdata/obfuscated-jira.json  (labels kept; names scrubbed)
+
+# Or bootstrap from the offline demo board (no credentials):
+npm run export:obfuscated -w @ecp/backend -- --from-demo
+```
+
+Tests load that fixture via `fakeClientFromFixture` / `datasetFromJira` so the
+importer and mapper stay exercised against real topology.
 
 > `seed:local` seeds this machine's SQLite file. Its Phase 7 counterpart,
 > `seed:jira`, pushes the same synthetic dataset into a real Jira instance so the
