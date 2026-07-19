@@ -250,10 +250,20 @@ function GraphLegend() {
   );
 }
 
-/** A cubic Bézier from the blocker's right edge to the blocked node's left edge. */
+/**
+ * A smooth path from the blocker's right edge to the blocked node's left edge,
+ * chaining a cubic segment through each routed waypoint so multi-layer edges
+ * bend around node boxes.
+ */
 function EdgePath({ edge, lit }: { edge: LayoutEdge; lit: boolean | null }) {
-  const dx = Math.max(28, (edge.x2 - edge.x1) / 2);
-  const d = `M ${edge.x1} ${edge.y1} C ${edge.x1 + dx} ${edge.y1}, ${edge.x2 - dx} ${edge.y2}, ${edge.x2} ${edge.y2}`;
+  const [first, ...rest] = edge.points;
+  let d = `M ${first!.x} ${first!.y}`;
+  let prev = first!;
+  for (const p of rest) {
+    const dx = Math.max(24, (p.x - prev.x) / 2);
+    d += ` C ${prev.x + dx} ${prev.y}, ${p.x - dx} ${p.y}, ${p.x} ${p.y}`;
+    prev = p;
+  }
   const className = [
     'dependency-edge',
     edge.fromHighLeverage ? 'high-leverage' : '',

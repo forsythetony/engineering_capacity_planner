@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import type { DomainDataset, WorkItem } from '@ecp/shared';
+import type { Dependency, DomainDataset, WorkItem } from '@ecp/shared';
 import {
   buildGraphLayout,
   GRAPH_GEOMETRY,
   leverageTier,
   nodeState,
   subtreeKeys,
+  type LayoutEdge,
 } from '../src/lib/graph';
-import { scopeEpic, type Scenario } from '../src/lib/projection';
+import { scopeEpic, type EpicScope, type Scenario } from '../src/lib/projection';
 import { loadBundledDataset } from '../src/data/loadDataset';
 
 const dataset = loadBundledDataset();
@@ -23,6 +24,40 @@ function emptyScenario(over: Partial<Scenario> = {}): Scenario {
     oncallMultiplier: 0.5,
     ...over,
   };
+}
+
+/** A bare To-Do work item with the given key (story wired up by scopeWith). */
+function wi(key: string): WorkItem {
+  return { key, storyKey: '', title: key, points: 1, status: 'To Do', assigneeId: null };
+}
+
+function dep(blocker: string, blocked: string): Dependency {
+  return { id: `${blocker}__${blocked}`, blockerItemKey: blocker, blockedItemKey: blocked };
+}
+
+/** Scope a hand-built graph onto the bundled epic's first story. */
+function scopeWith(workItems: WorkItem[], dependencies: Dependency[]): EpicScope {
+  const storyKey = dataset.stories.find((s) => s.epicKey === epicKey)!.key;
+  const ds: DomainDataset = {
+    ...dataset,
+    workItems: workItems.map((w) => ({ ...w, storyKey })),
+    dependencies,
+  };
+  return scopeEpic(ds, epicKey);
+}
+
+/** Count crossings among straight (single-layer) edges by endpoint order. */
+function countCrossings(edges: readonly LayoutEdge[]): number {
+  let crossings = 0;
+  for (let i = 0; i < edges.length; i++) {
+    for (let j = i + 1; j < edges.length; j++) {
+      const a = edges[i]!;
+      const b = edges[j]!;
+      if (a.x1 !== b.x1 || a.x2 !== b.x2) continue; // only same-span edges
+      if (Math.sign(a.y1 - b.y1) * Math.sign(a.y2 - b.y2) < 0) crossings++;
+    }
+  }
+  return crossings;
 }
 
 describe('leverageTier', () => {
@@ -221,6 +256,56 @@ describe('buildGraphLayout — hideDone option', () => {
     const shown = buildGraphLayout(scope, scenario, null, { hideDone: true });
     expect(shown.nodes.find((n) => n.key === target)).toBeUndefined();
     expect(shown.unconnectedKeys).not.toContain(target);
+  });
+});
+
+describe('buildGraphLayout — waypoint routing (phase 3)', () => {
+  it('routes a multi-layer edge through a waypoint in each crossed column', () => {
+    // Chain A→B→C→D (layers 0..3) plus a long A→D spanning three layers.
+    const layout = buildGraphLayout(
+      scopeWith(['A', 'B', 'C', 'D'].map(wi), [
+        dep('A', 'B'),
+        dep('B', 'C'),
+        dep('C', 'D'),
+        dep('A', 'D'),
+      ]),
+      emptyScenario(),
+    );
+
+    const { padding, nodeWidth, colGap } = GRAPH_GEOMETRY;
+    const colCenter = (layer: number) => padding + layer * (nodeWidth + colGap) + nodeWidth / 2;
+
+    const long = layout.edges.find((e) => e.from === 'A' && e.to === 'D')!;
+    expect(long.points).toHaveLength(4); // start + 2 dummy waypoints + end
+    expect(long.points[1]!.x).toBeCloseTo(colCenter(1));
+    expect(long.points[2]!.x).toBeCloseTo(colCenter(2));
+
+    // A single-layer edge stays a straight two-point segment.
+    const short = layout.edges.find((e) => e.from === 'A' && e.to === 'B')!;
+    expect(short.points).toHaveLength(2);
+  });
+});
+
+describe('buildGraphLayout — crossing reduction (phase 3)', () => {
+  it('reorders a column to remove an obvious edge crossing', () => {
+    // X→Q and Y→P. Seeded by key the columns are [X,Y] / [P,Q], which crosses;
+    // the barycenter sweep should flip layer 1 to [Q,P] so both edges run flat.
+    const layout = buildGraphLayout(
+      scopeWith(['X', 'Y', 'P', 'Q'].map(wi), [dep('X', 'Q'), dep('Y', 'P')]),
+      emptyScenario(),
+    );
+    const y = (key: string) => layout.nodes.find((n) => n.key === key)!.y;
+
+    expect(y('Q')).toBeLessThan(y('P')); // the swap happened
+    expect(countCrossings(layout.edges)).toBe(0); // and the crossing is gone
+  });
+
+  it('keeps a naturally-ordered graph crossing-free', () => {
+    const layout = buildGraphLayout(
+      scopeWith(['A', 'B', 'C', 'D'].map(wi), [dep('A', 'C'), dep('B', 'D')]),
+      emptyScenario(),
+    );
+    expect(countCrossings(layout.edges)).toBe(0);
   });
 });
 

@@ -40,6 +40,11 @@ export interface LayoutNode {
   focused: boolean;
 }
 
+export interface Point {
+  x: number;
+  y: number;
+}
+
 export interface LayoutEdge {
   id: string;
   from: string;
@@ -50,6 +55,13 @@ export interface LayoutEdge {
   /** Blocked's left-edge midpoint. */
   x2: number;
   y2: number;
+  /**
+   * The full routed polyline from `x1,y1` to `x2,y2`. For an edge spanning more
+   * than one layer it bends through a waypoint in each intermediate column so it
+   * routes around node boxes instead of slicing across them; a single-layer edge
+   * is just the two endpoints. Always includes both endpoints.
+   */
+  points: Point[];
   /** True when the source is a high-leverage node (edges drawn emphasized). */
   fromHighLeverage: boolean;
 }
@@ -115,6 +127,8 @@ export const GRAPH_GEOMETRY = {
   colGap: 72,
   rowGap: 18,
   padding: 20,
+  /** Vertical lane a routed edge reserves when it passes through a column. */
+  dummyLaneHeight: 20,
 } as const;
 
 /**
@@ -156,6 +170,149 @@ export interface LayoutOptions {
   hideDone?: boolean;
 }
 
+/** A real node or a routing dummy occupying a slot in some column. */
+interface Slot {
+  id: string;
+  isDummy: boolean;
+  layer: number;
+  /** Slot ids one layer left / right that this slot connects to. */
+  prev: string[];
+  next: string[];
+  /** Seed order (lower = higher up); real nodes get leverage rank, dummies ∞. */
+  seed: number;
+}
+
+/** An edge as an ordered slot chain: `[from, ...dummies, to]`, for routing. */
+interface EdgeChain {
+  id: string;
+  from: string;
+  to: string;
+  chain: string[];
+}
+
+interface ColumnLayout {
+  orderedLayers: string[][];
+  slots: Map<string, Slot>;
+  edgeChains: EdgeChain[];
+  centerY: Map<string, number>;
+  topY: Map<string, number>;
+  rowOf: Map<string, number>;
+}
+
+/**
+ * Build the per-column ordering and vertical coordinates for the layered graph.
+ *
+ * Long edges get a dummy slot in each column they cross, then a few barycenter
+ * sweeps reorder each column toward the average position of its neighbours to
+ * cut crossings. The initial order is seeded by leverage (via `withinLayerOrder`)
+ * and ties break back to that seed, so high-leverage tickets stay near the top
+ * when it costs no extra crossings. Deterministic (no clock/random) so the
+ * geometry is unit-testable.
+ */
+function layoutColumns(
+  analysis: GraphAnalysis,
+  layerOf: ReadonlyMap<string, number>,
+  dummyLaneHeight: number,
+  nodeHeight: number,
+  rowGap: number,
+  padding: number,
+): ColumnLayout {
+  const layerCount = analysis.layerCount;
+  const slots = new Map<string, Slot>();
+  const layers: string[][] = Array.from({ length: layerCount }, () => []);
+
+  // Real-node slots, seeded high-to-low by leverage within each column.
+  const seedCols: GraphNodeAnalysis[][] = Array.from({ length: layerCount }, () => []);
+  for (const n of analysis.nodes) seedCols[n.layer]!.push(n);
+  for (const col of seedCols) col.sort(withinLayerOrder);
+  let seed = 0;
+  for (const col of seedCols) {
+    for (const n of col) {
+      const s: Slot = { id: n.key, isDummy: false, layer: n.layer, prev: [], next: [], seed: seed++ };
+      slots.set(n.key, s);
+      layers[n.layer]!.push(n.key);
+    }
+  }
+
+  // Insert dummies for edges spanning more than one layer; record each chain.
+  const edgeChains: EdgeChain[] = [];
+  let dummyId = 0;
+  for (const node of analysis.nodes) {
+    for (const target of node.blocks) {
+      const uLayer = node.layer;
+      const vLayer = layerOf.get(target)!;
+      const chain: string[] = [node.key];
+      let prevId = node.key;
+      // Only forward, multi-layer edges get dummies; a cycle's back-edge (vLayer
+      // <= uLayer) is drawn straight rather than routed.
+      for (let L = uLayer + 1; L < vLayer; L++) {
+        const id = `__dummy-${dummyId++}`;
+        const s: Slot = { id, isDummy: true, layer: L, prev: [prevId], next: [], seed: Number.POSITIVE_INFINITY };
+        slots.set(id, s);
+        layers[L]!.push(id);
+        slots.get(prevId)!.next.push(id);
+        chain.push(id);
+        prevId = id;
+      }
+      if (vLayer > uLayer) {
+        slots.get(prevId)!.next.push(target);
+        slots.get(target)!.prev.push(prevId);
+      }
+      chain.push(target);
+      edgeChains.push({ id: `${node.key}->${target}`, from: node.key, to: target, chain });
+    }
+  }
+
+  const indexIn = (layer: number): Map<string, number> => {
+    const m = new Map<string, number>();
+    layers[layer]!.forEach((id, i) => m.set(id, i));
+    return m;
+  };
+
+  // Sort one layer by the barycenter (mean neighbour index) on a given side.
+  // No-neighbour slots keep their current index; ties fall back to seed order.
+  const sortLayer = (layer: number, side: 'prev' | 'next', neighborIndex: Map<string, number>) => {
+    const pos = new Map(layers[layer]!.map((id, i) => [id, i] as const));
+    layers[layer] = [...layers[layer]!]
+      .map((id) => {
+        const neigh = side === 'prev' ? slots.get(id)!.prev : slots.get(id)!.next;
+        const bary =
+          neigh.length === 0
+            ? pos.get(id)!
+            : neigh.reduce((sum, n) => sum + (neighborIndex.get(n) ?? 0), 0) / neigh.length;
+        return { id, bary };
+      })
+      .sort((a, b) => a.bary - b.bary || slots.get(a.id)!.seed - slots.get(b.id)!.seed)
+      .map((x) => x.id);
+  };
+
+  // A handful of down-then-up sweeps is plenty to settle a graph this size.
+  const SWEEPS = 4;
+  for (let iter = 0; iter < SWEEPS; iter++) {
+    for (let L = 1; L < layerCount; L++) sortLayer(L, 'prev', indexIn(L - 1));
+    for (let L = layerCount - 2; L >= 0; L--) sortLayer(L, 'next', indexIn(L + 1));
+  }
+
+  // Assign vertical coordinates column by column (real nodes are tall, dummy
+  // lanes short), stacking top-to-bottom with a uniform gap.
+  const centerY = new Map<string, number>();
+  const topY = new Map<string, number>();
+  const rowOf = new Map<string, number>();
+  for (let L = 0; L < layerCount; L++) {
+    let cursor = padding;
+    layers[L]!.forEach((id, row) => {
+      const h = slots.get(id)!.isDummy ? dummyLaneHeight : nodeHeight;
+      if (row > 0) cursor += rowGap;
+      topY.set(id, cursor);
+      centerY.set(id, cursor + h / 2);
+      rowOf.set(id, row);
+      cursor += h;
+    });
+  }
+
+  return { orderedLayers: layers, slots, edgeChains, centerY, topY, rowOf };
+}
+
 /**
  * Build the positioned layout for the epic's dependency graph. When `focusKey`
  * names a work item, the layout is restricted to that ticket's connected
@@ -168,7 +325,7 @@ export function buildGraphLayout(
   focusKey: string | null = null,
   options: LayoutOptions = {},
 ): GraphLayout {
-  const { nodeWidth, nodeHeight, colGap, rowGap, padding } = GRAPH_GEOMETRY;
+  const { nodeWidth, nodeHeight, colGap, rowGap, padding, dummyLaneHeight } = GRAPH_GEOMETRY;
 
   const hasFocus = focusKey !== null && scope.workItems.some((w) => w.key === focusKey);
   const keep = hasFocus ? subtreeKeys(scope.dependencies, focusKey!) : null;
@@ -214,59 +371,76 @@ export function buildGraphLayout(
   }));
   const analysis = analyzeGraph(keys, edges);
 
-  // Bucket analysis nodes by layer, ordered within each column.
-  const columns: GraphNodeAnalysis[][] = Array.from({ length: analysis.layerCount }, () => []);
-  for (const node of analysis.nodes) columns[node.layer]!.push(node);
-  for (const col of columns) col.sort(withinLayerOrder);
+  // ── Sugiyama-style ordering with dummy waypoints ────────────────────────
+  // The engine already layered nodes by longest blocker chain. Here we (1) drop
+  // a dummy slot into every column an edge crosses, (2) order each column to
+  // reduce edge crossings (seeded by leverage so important tickets start high),
+  // and (3) route each edge through its dummies so long edges bend around node
+  // boxes instead of slicing through them.
+  const layerCount = analysis.layerCount;
+  const layerOf = new Map(analysis.nodes.map((n) => [n.key, n.layer] as const));
+
+  const layered = layoutColumns(analysis, layerOf, dummyLaneHeight, nodeHeight, rowGap, padding);
+  const { orderedLayers, slots, centerY, topY, rowOf } = layered;
+
+  const columnX = (layer: number) => padding + layer * (nodeWidth + colGap);
 
   const nodes: LayoutNode[] = [];
   const boxByKey = new Map<string, LayoutNode>();
-  columns.forEach((col, layer) => {
-    col.forEach((node, row) => {
-      const item = items.get(node.key)!;
-      const layout: LayoutNode = {
-        key: node.key,
-        title: item.title,
-        points: item.points,
-        status: item.status,
-        layer,
-        row,
-        x: padding + layer * (nodeWidth + colGap),
-        y: padding + row * (nodeHeight + rowGap),
-        width: nodeWidth,
-        height: nodeHeight,
-        directDependents: node.directDependents,
-        transitiveDependents: node.transitiveDependents,
-        tier: leverageTier(node.transitiveDependents),
-        focused: hasFocus && node.key === focusKey,
-        ...nodeState(item, scenario),
-      };
-      nodes.push(layout);
-      boxByKey.set(node.key, layout);
-    });
-  });
-
-  const edgesOut: LayoutEdge[] = [];
   for (const node of analysis.nodes) {
-    const from = boxByKey.get(node.key)!;
-    for (const target of node.blocks) {
-      const to = boxByKey.get(target)!;
-      edgesOut.push({
-        id: `${node.key}->${target}`,
-        from: node.key,
-        to: target,
-        x1: from.x + from.width,
-        y1: from.y + from.height / 2,
-        x2: to.x,
-        y2: to.y + to.height / 2,
-        fromHighLeverage: from.tier === 'high',
-      });
-    }
+    const item = items.get(node.key)!;
+    const layout: LayoutNode = {
+      key: node.key,
+      title: item.title,
+      points: item.points,
+      status: item.status,
+      layer: node.layer,
+      row: rowOf.get(node.key) ?? 0,
+      x: columnX(node.layer),
+      y: topY.get(node.key)!,
+      width: nodeWidth,
+      height: nodeHeight,
+      directDependents: node.directDependents,
+      transitiveDependents: node.transitiveDependents,
+      tier: leverageTier(node.transitiveDependents),
+      focused: hasFocus && node.key === focusKey,
+      ...nodeState(item, scenario),
+    };
+    nodes.push(layout);
+    boxByKey.set(node.key, layout);
   }
 
-  const rows = columns.reduce((max, col) => Math.max(max, col.length), 0);
-  const width = analysis.layerCount === 0 ? 0 : padding * 2 + analysis.layerCount * nodeWidth + (analysis.layerCount - 1) * colGap;
-  const height = rows === 0 ? 0 : padding * 2 + rows * nodeHeight + (rows - 1) * rowGap;
+  const edgesOut: LayoutEdge[] = layered.edgeChains.map(({ id, from, to, chain }) => {
+    const fromBox = boxByKey.get(from)!;
+    const toBox = boxByKey.get(to)!;
+    const start: Point = { x: fromBox.x + fromBox.width, y: fromBox.y + fromBox.height / 2 };
+    const end: Point = { x: toBox.x, y: toBox.y + toBox.height / 2 };
+    // Interior chain entries are the dummies; route through each column's centre.
+    const mid: Point[] = chain.slice(1, -1).map((dummyId) => ({
+      x: columnX(slots.get(dummyId)!.layer) + nodeWidth / 2,
+      y: centerY.get(dummyId)!,
+    }));
+    return {
+      id,
+      from,
+      to,
+      x1: start.x,
+      y1: start.y,
+      x2: end.x,
+      y2: end.y,
+      points: [start, ...mid, end],
+      fromHighLeverage: fromBox.tier === 'high',
+    };
+  });
+
+  const maxColumnBottom = orderedLayers.reduce((max, layer) => {
+    const last = layer[layer.length - 1];
+    if (last === undefined) return max;
+    const s = slots.get(last)!;
+    return Math.max(max, topY.get(last)! + (s.isDummy ? dummyLaneHeight : nodeHeight));
+  }, 0);
+  const width = layerCount === 0 ? 0 : padding * 2 + layerCount * nodeWidth + (layerCount - 1) * colGap;
+  const height = layerCount === 0 ? 0 : maxColumnBottom + padding;
 
   return {
     nodes,
