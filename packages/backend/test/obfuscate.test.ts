@@ -1,15 +1,15 @@
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { JiraImporter } from '../src/importer/jira.js';
 import { FakeJiraClient } from '../src/jira/fake-client.js';
 import { fakeClientFromFixture, fixtureFromCache } from '../src/jira/load-fixture.js';
 import { datasetFromJira } from '../src/jira/mapper.js';
 import type { JiraMapping } from '../src/jira/mapping.js';
-import { obfuscateSyncCache, type ObfuscatedJiraFixture } from '../src/jira/obfuscate.js';
+import { obfuscateSyncCache } from '../src/jira/obfuscate.js';
 import { readSyncCache, writeSyncCache, type JiraSyncCache } from '../src/jira/sync-cache.js';
+import { loadObfuscatedFixture } from './helpers/fixture.js';
 
 const mapping: JiraMapping = {
   projectKey: 'ACME',
@@ -242,11 +242,7 @@ describe('sync cache write/read', () => {
 
 describe('committed obfuscated-jira.json fixture', () => {
   it('loads through FakeJiraClient and yields a consistent dataset', async () => {
-    const fixturePath = resolve(
-      dirname(fileURLToPath(import.meta.url)),
-      '../testdata/obfuscated-jira.json',
-    );
-    const fixture = JSON.parse(readFileSync(fixturePath, 'utf8')) as ObfuscatedJiraFixture;
+    const fixture = loadObfuscatedFixture();
     expect(fixture.note).toMatch(/Safe to commit/);
     expect(fixture.workIssues.length).toBeGreaterThan(0);
 
